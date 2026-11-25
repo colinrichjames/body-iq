@@ -152,6 +152,11 @@ function cleanBlocks(blocks: BlockLog[] | undefined): BlockLog[] | null {
   }));
 }
 
+function cleanOrder(order: string[] | undefined): string[] | null {
+  if (!Array.isArray(order) || !order.length) return null;
+  return order.filter((k) => typeof k === "string").slice(0, 500).map((k) => k.slice(0, 160));
+}
+
 /** In-session intake, validated to the database limits. Blank or invalid means not logged. */
 function fuelFields(carbs: unknown, fluid: unknown, sodium: unknown) {
   const n = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
@@ -386,6 +391,7 @@ export async function saveProgress(input: {
   blockIndex: number;
   elapsedMs: number;
   blocks?: BlockLog[];
+  order?: string[];
 }): Promise<{ error: string | null }> {
   const { supabase, userId } = await requireUser();
   const { data: w } = await supabase.from("workouts").select("status").eq("id", input.id).maybeSingle<{ status: string }>();
@@ -410,7 +416,7 @@ export async function saveProgress(input: {
     .from("workouts")
     .update({
       status: "in_progress",
-      progress: { stepIndex: Math.max(0, Math.round(input.stepIndex)), blockIndex, elapsedMs, updatedAt: new Date().toISOString(), blocks: cleanBlocks(input.blocks) ?? [] },
+      progress: { stepIndex: Math.max(0, Math.round(input.stepIndex)), blockIndex, elapsedMs, updatedAt: new Date().toISOString(), blocks: cleanBlocks(input.blocks) ?? [], ...(cleanOrder(input.order) ? { order: cleanOrder(input.order) } : {}) },
     })
     .eq("id", input.id);
   if (error) return { error: error.message };

@@ -7,13 +7,14 @@ import type { BlockLog, SetLog, Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, field } from "@/components/ui";
 import { buildSteps } from "@/lib/steps";
 import { elapsedMs as elapsedAt, pickResume } from "@/lib/progress";
-import { exerciseOverview, isDumbbell } from "@/lib/context";
+import { isDumbbell } from "@/lib/context";
+import { applyOrder, moveExercise, queueOverview, stepKey } from "@/lib/queue";
 import { fmtPace, fromKm, paceProblem, toKm, type DistUnit } from "@/lib/distance";
 import { fmtTime } from "@/lib/hyrox";
 import { countSets, recap, totalVolume, volumeByExercise, skipExerciseLogs, skippedLog } from "@/lib/player";
 import { finishWorkout, saveProgress } from "../../actions";
 
-type Resume = { logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; elapsedMs: number };
+type Resume = { logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; elapsedMs: number; order?: string[] };
 
 const AUTO_KEY = "bodyiq-auto-advance-rest";
 const GO_MS = 3000;
@@ -47,9 +48,9 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const router = useRouter();
   const { toast } = useToast();
   const warned = useRef(false);
-  const steps = useMemo(() => buildSteps(workout), [workout]);
+  const baseSteps = useMemo(() => buildSteps(workout), [workout]);
   const blocks = workout.structure?.blocks ?? [];
-  const mode: "sets" | "blocks" | "timer" = steps.length ? "sets" : blocks.length ? "blocks" : "timer";
+  const mode: "sets" | "blocks" | "timer" = baseSteps.length ? "sets" : blocks.length ? "blocks" : "timer";
 
   const draftKey = `bodyiq-draft-${workout.id}`;
   const [now, setNow] = useState(() => Date.now());
@@ -59,7 +60,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) ?? "null");
       if (d && Array.isArray(d.logs)) {
-        local = { logs: d.logs, blocks: Array.isArray(d.blocks) ? d.blocks : [], stepIndex: Number(d.stepIndex) || 0, blockIndex: Number(d.blockIndex) || 0, elapsedMs: typeof d.elapsedMs === "number" ? d.elapsedMs : 0 };
+        local = { logs: d.logs, blocks: Array.isArray(d.blocks) ? d.blocks : [], stepIndex: Number(d.stepIndex) || 0, blockIndex: Number(d.blockIndex) || 0, elapsedMs: typeof d.elapsedMs === "number" ? d.elapsedMs : 0, order: Array.isArray(d.order) ? d.order.filter((k: unknown) => typeof k === "string") : undefined };
       }
     } catch {
       // storage unavailable
@@ -72,7 +73,10 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const [pausedAt, setPausedAt] = useState<number | null>(null);
   const paused = pausedAt !== null;
   const effNow = pausedAt ?? now;
-  const [stepIndex, setStepIndex] = useState(() => Math.min(saved?.stepIndex ?? 0, Math.max(0, steps.length - 1)));
+  const [stepIndex, setStepIndex] = useState(() => Math.min(saved?.stepIndex ?? 0, Math.max(0, baseSteps.length - 1)));
+  // Order the remaining sets will be done in (null = as planned). Sets already logged never move.
+  const [order, setOrder] = useState<string[] | null>(() => saved?.order ?? null);
+  const steps = useMemo(() => applyOrder(baseSteps, order), [baseSteps, order]);
   const [restEnd, setRestEnd] = useState<number | null>(null);
   // Setting kept on this device (a Settings page can move it to the account later). Default ON.
   const [autoAdvance, setAutoAdvanceState] = useState(() => {
@@ -100,15 +104,15 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const [eRpe, setERpe] = useState("");
   const [finished, setFinished] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
-  const prefill = (i: number, done: SetLog[]) => {
-    const st = steps[i];
+  const prefill = (i: number, done: SetLog[], list: typeof steps = steps) => {
+    const st = list[i];
     if (!st) return { reps: "", weight: "" };
     const prev = [...done].reverse().find((l) => l.exercise === st.exercise && l.weight_lb !== null)?.weight_lb;
     const w = prev ?? lastWeights[st.exercise] ?? st.weight;
     return { reps: String(st.seconds ?? st.reps ?? ""), weight: w !== undefined && w !== null ? String(w) : "" };
   };
-  const [reps, setReps] = useState(() => prefill(0, []).reps);
-  const [weight, setWeight] = useState(() => prefill(0, []).weight);
+  const [reps, setReps] = useState(() => prefill(stepIndex, saved?.logs ?? []).reps);
+  const [weight, setWeight] = useState(() => prefill(stepIndex, saved?.logs ?? []).weight);
   // Summary fields (notes, RPE, minutes, HR, power) are kept on this phone too, so a refresh doesn't lose what you typed.
   const sumKey = `${draftKey}-summary`;
   const [sum0] = useState<Partial<Record<"notes" | "rpe" | "minutes" | "avgHr" | "avgPower" | "fuelCarbs" | "fluidMl" | "sodiumMg", string>>>(() => {
@@ -177,26 +181,26 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   })();
 
   const elapsedNow = elapsedAt(baseMs, segmentStart, now);
-  const latest = useRef({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow });
+  const latest = useRef({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow, order });
   useEffect(() => {
-    latest.current = { logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow };
+    latest.current = { logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow, order };
   });
 
   // Never lose a session: keep progress on the phone until it is saved (heartbeat every 5 s).
   const beat = Math.floor(now / 5000);
   useEffect(() => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsedMs: latest.current.elapsed }));
+      localStorage.setItem(draftKey, JSON.stringify({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsedMs: latest.current.elapsed, order }));
     } catch {
       // storage unavailable
     }
-  }, [draftKey, logs, blockLogs, stepIndex, blockIndex, beat]);
+  }, [draftKey, logs, blockLogs, stepIndex, blockIndex, order, beat]);
 
   // Also keep it on the server so the session shows as in progress everywhere.
   const persist = useCallback(
-    (over?: Partial<{ logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number }>) => {
+    (over?: Partial<{ logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; order: string[] | null }>) => {
       const l = latest.current;
-      return saveProgress({ id: workout.id, sets: over?.logs ?? l.logs, blocks: over?.blocks ?? l.blocks, stepIndex: over?.stepIndex ?? l.stepIndex, blockIndex: over?.blockIndex ?? l.blockIndex, elapsedMs: l.elapsed })
+      return saveProgress({ id: workout.id, sets: over?.logs ?? l.logs, blocks: over?.blocks ?? l.blocks, stepIndex: over?.stepIndex ?? l.stepIndex, blockIndex: over?.blockIndex ?? l.blockIndex, elapsedMs: l.elapsed, order: (over?.order !== undefined ? over.order : l.order) ?? undefined })
         .catch(() => ({ error: "offline" }))
         .then((res) => {
           // Tell the user once per outage; the draft stays on this phone and the next save retries.
@@ -279,6 +283,24 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     if (!step) return;
     const skipped = skipExerciseLogs(steps, stepIndex);
     advanceTo([...logs, ...skipped], stepIndex + skipped.length, 0);
+  }
+
+  /** Moves one exercise to the front ("next") or back ("later") of what is left, e.g. when its machine is taken. */
+  function reorder(exercise: string, where: "next" | "later") {
+    const next = moveExercise(steps, stepIndex, exercise, where);
+    if (next === steps) return;
+    const keys = next.map(stepKey);
+    setOrder(keys);
+    latest.current = { ...latest.current, order: keys };
+    setShowOverview(false);
+    if (stepKey(next[stepIndex]) !== stepKey(steps[stepIndex])) {
+      const fresh = prefill(stepIndex, logs, next);
+      setReps(fresh.reps);
+      setWeight(fresh.weight);
+      setSetRpeVal("");
+      setRestEnd(null);
+    }
+    void persist({ order: keys });
   }
 
   /** Back one set, with its values restored so they can be edited and saved again. */
@@ -646,7 +668,10 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   // ------------------------------------------------------------------- sets
   if (mode === "sets" && step) {
     const nextUp = steps[stepIndex + 1];
-    const ov = exerciseOverview(steps, stepIndex);
+    const queue = queueOverview(steps, logs, stepIndex);
+    const position = queue.filter((q) => q.finished).length + 1;
+    const stillToDo = queue.filter((q) => !q.finished).length;
+    const metres = step.unit === "m";
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
         <Header title={workout.title} elapsed={elapsedSec} onQuit={quit} onPause={pause} />
@@ -655,27 +680,37 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
         </div>
         <div className="flex-1 pt-8">
           <button type="button" onClick={() => setShowOverview((v) => !v)} aria-expanded={showOverview} className="text-left text-sm text-emerald-400">
-            Exercise {ov.position} of {ov.list.length} · {step.exercise} {showOverview ? "▴" : "▾"}
+            Exercise {position} of {queue.length} · {step.exercise} {showOverview ? "▴" : "▾"}
           </button>
           {showOverview && (
             <ul className="mt-2 divide-y divide-zinc-800 rounded-xl border border-zinc-800 text-sm">
-              {ov.list.map((o) => (
-                <li key={o.name} className={`flex justify-between px-3 py-2 ${o.current ? "text-emerald-300" : o.setsDone >= o.totalSets ? "text-zinc-600" : "text-zinc-300"}`}>
-                  <span>{o.name}</span>
+              {queue.map((o) => (
+                <li key={o.name} className={`flex items-center justify-between gap-2 px-3 py-2 ${o.current ? "text-emerald-300" : o.finished ? "text-zinc-600" : "text-zinc-300"}`}>
+                  <span className="min-w-0 flex-1 truncate">{o.name}</span>
                   <span className="tabular-nums">
-                    {o.setsDone}/{o.totalSets} sets
+                    {o.done}/{o.total} sets
+                    {o.skipped ? ` · ${o.skipped} skipped` : ""}
                   </span>
+                  {!o.finished && !o.current && (
+                    <button type="button" onClick={() => reorder(o.name, "next")} aria-label={`Do ${o.name} next`} className="rounded-lg border border-zinc-700 px-2 py-1 text-xs text-emerald-400">
+                      Do now
+                    </button>
+                  )}
+                  {!o.finished && o.current && stillToDo > 1 && (
+                    <button type="button" onClick={() => reorder(o.name, "later")} aria-label={`Do ${o.name} later`} className="rounded-lg border border-zinc-700 px-2 py-1 text-xs text-zinc-300">
+                      Later
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
           )}
           <p className="mt-2 text-sm text-zinc-500">
             Set {step.setNumber} of {step.totalSets}
-            {workout.structure?.rounds ? " (round)" : ""}
           </p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">{step.exercise}</h1>
           <p className="mt-2 text-zinc-400">
-            Target: {step.seconds ? `${step.seconds} s` : `${step.reps ?? "-"} reps`}
+            Target: {step.seconds ? `${step.seconds} s` : metres ? `${step.reps ?? "-"} m` : `${step.reps ?? "-"} reps`}
             {step.weight ? ` @ ${step.weight} lb${isDumbbell(step.exercise) ? " each" : ""}` : ""}
           </p>
           {step.note && <p className="mt-1 text-sm text-zinc-500">{step.note}</p>}
@@ -683,7 +718,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             <label className="text-sm text-zinc-400">
-              {step.seconds ? "Seconds" : "Reps"}
+              {step.seconds ? "Seconds" : metres ? "Metres" : "Reps"}
               <input value={reps} onChange={(e) => setReps(e.target.value)} type="number" inputMode="numeric" className={`${field} mt-1 text-2xl`} />
             </label>
             <label className="text-sm text-zinc-400">
@@ -716,18 +751,19 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
         <button onClick={completeSet} className={`${btnPrimary} py-4 text-lg`}>
           {stepIndex >= steps.length - 1 ? "Finish" : "Done set"}
         </button>
-        <div className={`mt-3 grid gap-3 ${workout.structure?.rounds ? "grid-cols-2" : "grid-cols-3"}`}>
+        <div className="mt-3 grid grid-cols-2 gap-3">
           <button onClick={goBack} disabled={stepIndex === 0} className={btnGhost}>
             ‹ Back
+          </button>
+          <button onClick={() => reorder(step.exercise, "later")} disabled={stillToDo < 2} className={btnGhost}>
+            Do later
           </button>
           <button onClick={skipSet} className={btnGhost}>
             Skip set
           </button>
-          {!workout.structure?.rounds && (
-            <button onClick={skipExercise} className={btnGhost}>
-              Skip exercise
-            </button>
-          )}
+          <button onClick={skipExercise} className={btnGhost}>
+            Skip exercise
+          </button>
         </div>
       </main>
     );
