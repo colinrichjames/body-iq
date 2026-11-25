@@ -44,7 +44,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const mount = (w: Workout) => render(<Assistant workout={w} lastWeights={{}} lastTime={{}} serverResume={null} />);
+const mount = (w: Workout, extra: Partial<React.ComponentProps<typeof Assistant>> = {}) => render(<Assistant workout={w} lastWeights={{}} lastTime={{}} serverResume={null} {...extra} />);
 
 describe("strength player", () => {
   it("Back from set 3 returns to set 2 with its logged values restored for editing", () => {
@@ -116,6 +116,23 @@ describe("strength player", () => {
   });
 });
 
+describe("player context", () => {
+  it("shows exercise position, last time, per-dumbbell label and the overview", () => {
+    mount(strength, { lastTime: { Fly: "12 × 35" } });
+    expect(screen.getByText(/exercise 1 of 2 · bench/i)).toBeTruthy();
+    click(/skip exercise/i);
+    expect(screen.getByText(/exercise 2 of 2 · fly/i)).toBeTruthy();
+    expect(screen.getByText(/last time: 12 × 35/i)).toBeTruthy();
+    click(/exercise 2 of 2/i);
+    expect(screen.getByText("0/2 sets")).toBeTruthy();
+  });
+  it("labels dumbbell weight per dumbbell", () => {
+    const db = { ...strength, structure: { exercises: [{ name: "Dumbbell Fly", sets: 2, reps: 12, weight_lb: 35 }] } } as unknown as Workout;
+    mount(db);
+    expect(screen.getByText(/weight per dumbbell \(lb\)/i)).toBeTruthy();
+  });
+});
+
 describe("rest timer", () => {
   it("auto-advances about 3 s after rest ends (default on)", () => {
     mount(strength);
@@ -164,6 +181,17 @@ describe("HYROX block player", () => {
     click(/finish/i);
     expect(screen.getByText(/1 skipped/i)).toBeTruthy();
     expect(screen.getByText("skipped")).toBeTruthy();
+  });
+
+  it("shows the numeric target and lists the split on the finish screen", () => {
+    mount(hyrox, { targets: { "Run 1": 338, SkiErg: 250 }, targetRace: "HYROX Seattle" });
+    expect(screen.getByText(/target 5:38 \/km/i)).toBeTruthy();
+    act(() => vi.advanceTimersByTime(300_000));
+    click(/next block/i);
+    expect(screen.getByText(/target 4:10/i)).toBeTruthy();
+    click(/next block/i);
+    click(/finish/i);
+    expect(screen.getByText(/5:00 \(target 5:38\)/)).toBeTruthy();
   });
 
   it("can be paused", () => {

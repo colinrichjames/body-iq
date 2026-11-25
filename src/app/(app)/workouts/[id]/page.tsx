@@ -11,6 +11,8 @@ import { sessionUnits } from "@/lib/steps";
 import { progressLabel } from "@/lib/progress";
 import { StatusBadge } from "@/components/status-badge";
 import { recap } from "@/lib/player";
+import { buildSteps } from "@/lib/steps";
+import { restSummary } from "@/lib/context";
 import type { WorkoutSet } from "@/lib/types";
 import { field } from "@/components/ui";
 import { attachActivity, deleteWorkout, duplicateWorkout, moveWorkout, setStatus } from "../actions";
@@ -62,6 +64,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
     loggedSets = ls ?? [];
   }
   const recapRows = recap(loggedSets.map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped })));
+  const exSteps = buildSteps(w);
   const blockRows = w.status === "completed" || w.status === "in_progress" ? (w.status === "in_progress" ? (w.progress?.blocks ?? []) : (w.block_results ?? [])) : [];
 
   return (
@@ -95,6 +98,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
                     {e.weight_lb ? ` @ ${e.weight_lb} lb` : ""}
                   </span>
                 </div>
+                {restSummary(exSteps, e.name) && <p className="mt-0.5 text-xs text-zinc-500">{restSummary(exSteps, e.name)}</p>}
                 {looksMerged(e.name) && (
                   <p className="mt-1 text-xs text-amber-400">This looks like several exercises in one line. Tap Customize to split it before you start.</p>
                 )}
