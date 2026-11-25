@@ -83,7 +83,7 @@ export function MonthView({
                 {ws.slice(0, 4).map((w) => (
                   <span
                     key={w.id}
-                    className={`h-2 w-2 rounded-full ${SPORT_DOT[w.sport] ?? "bg-zinc-500"} ${w.status === "completed" ? "" : w.status === "skipped" ? "opacity-20" : w.status === "in_progress" ? "ring-2 ring-amber-400" : "opacity-50 ring-1 ring-zinc-500"}`}
+                    className={`h-2 w-2 rounded-full ${SPORT_DOT[w.sport] ?? "bg-zinc-500"} ${w.status === "completed" ? "" : w.status === "skipped" ? "opacity-60 ring-1 ring-rose-400" : w.status === "in_progress" ? "ring-2 ring-amber-400" : "opacity-50 ring-1 ring-zinc-500"}`}
                   />
                 ))}
               </span>

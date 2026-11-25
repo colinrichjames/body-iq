@@ -2,7 +2,7 @@ const STYLE: Record<string, { label: string; cls: string }> = {
   planned: { label: "Planned", cls: "border-zinc-700 text-zinc-400" },
   in_progress: { label: "In progress", cls: "border-amber-500/50 bg-amber-500/10 text-amber-400" },
   completed: { label: "Completed", cls: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400" },
-  skipped: { label: "Skipped", cls: "border-zinc-800 text-zinc-500" },
+  skipped: { label: "Skipped", cls: "border-rose-500/40 bg-rose-500/10 text-rose-300" },
   missed: { label: "Missed", cls: "border-amber-900 text-amber-500" },
 };
 
