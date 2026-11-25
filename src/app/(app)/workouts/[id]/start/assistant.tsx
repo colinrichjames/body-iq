@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Workout } from "@/lib/types";
+import type { BlockLog, SetLog, Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, field } from "@/components/ui";
 import { buildSteps } from "@/lib/steps";
 import { elapsedMs as elapsedAt, pickResume } from "@/lib/progress";
-import { finishWorkout, saveProgress, type SetLog } from "../../actions";
+import { countSets, recap, skipExerciseLogs, skippedLog } from "@/lib/player";
+import { finishWorkout, saveProgress } from "../../actions";
 
-type Resume = { logs: SetLog[]; stepIndex: number; blockIndex: number; elapsedMs: number };
+type Resume = { logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; elapsedMs: number };
 
 const fmt = (totalSec: number) => {
   const s = Math.max(0, Math.round(totalSec));
@@ -29,7 +30,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) ?? "null");
       if (d && Array.isArray(d.logs)) {
-        local = { logs: d.logs, stepIndex: Number(d.stepIndex) || 0, blockIndex: Number(d.blockIndex) || 0, elapsedMs: typeof d.elapsedMs === "number" ? d.elapsedMs : 0 };
+        local = { logs: d.logs, blocks: Array.isArray(d.blocks) ? d.blocks : [], stepIndex: Number(d.stepIndex) || 0, blockIndex: Number(d.blockIndex) || 0, elapsedMs: typeof d.elapsedMs === "number" ? d.elapsedMs : 0 };
       }
     } catch {
       // storage unavailable
@@ -37,13 +38,21 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
     return pickResume(serverResume, local);
   });
   // Elapsed time only counts while this screen is open: saved time plus this visit.
-  const [baseMs] = useState(saved?.elapsedMs ?? 0);
-  const [segmentStart] = useState<number | null>(() => Date.now());
+  const [baseMs, setBaseMs] = useState(saved?.elapsedMs ?? 0);
+  const [segmentStart, setSegmentStart] = useState<number | null>(() => Date.now());
+  const [pausedAt, setPausedAt] = useState<number | null>(null);
+  const paused = pausedAt !== null;
+  const effNow = pausedAt ?? now;
   const [stepIndex, setStepIndex] = useState(() => Math.min(saved?.stepIndex ?? 0, Math.max(0, steps.length - 1)));
   const [restEnd, setRestEnd] = useState<number | null>(null);
   const [blockIndex, setBlockIndex] = useState(() => Math.min(saved?.blockIndex ?? 0, Math.max(0, blocks.length - 1)));
   const [blockStart, setBlockStart] = useState(() => Date.now());
   const [logs, setLogs] = useState<SetLog[]>(() => saved?.logs ?? []);
+  const [blockLogs, setBlockLogs] = useState<BlockLog[]>(() => saved?.blocks ?? []);
+  const [editing, setEditing] = useState(false);
+  const [eReps, setEReps] = useState("");
+  const [eWeight, setEWeight] = useState("");
+  const [eRpe, setERpe] = useState("");
   const [finished, setFinished] = useState(false);
   const prefill = (i: number, done: SetLog[]) => {
     const st = steps[i];
@@ -102,26 +111,26 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
   })();
 
   const elapsedNow = elapsedAt(baseMs, segmentStart, now);
-  const latest = useRef({ logs, stepIndex, blockIndex, elapsed: elapsedNow });
+  const latest = useRef({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow });
   useEffect(() => {
-    latest.current = { logs, stepIndex, blockIndex, elapsed: elapsedNow };
+    latest.current = { logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow };
   });
 
   // Never lose a session: keep progress on the phone until it is saved (heartbeat every 5 s).
   const beat = Math.floor(now / 5000);
   useEffect(() => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ logs, stepIndex, blockIndex, elapsedMs: latest.current.elapsed }));
+      localStorage.setItem(draftKey, JSON.stringify({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsedMs: latest.current.elapsed }));
     } catch {
       // storage unavailable
     }
-  }, [draftKey, logs, stepIndex, blockIndex, beat]);
+  }, [draftKey, logs, blockLogs, stepIndex, blockIndex, beat]);
 
   // Also keep it on the server so the session shows as in progress everywhere.
   const persist = useCallback(
-    (over?: Partial<{ logs: SetLog[]; stepIndex: number; blockIndex: number }>) => {
+    (over?: Partial<{ logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number }>) => {
       const l = latest.current;
-      return saveProgress({ id: workout.id, sets: over?.logs ?? l.logs, stepIndex: over?.stepIndex ?? l.stepIndex, blockIndex: over?.blockIndex ?? l.blockIndex, elapsedMs: l.elapsed }).catch(() => ({ error: "offline" }));
+      return saveProgress({ id: workout.id, sets: over?.logs ?? l.logs, blocks: over?.blocks ?? l.blocks, stepIndex: over?.stepIndex ?? l.stepIndex, blockIndex: over?.blockIndex ?? l.blockIndex, elapsedMs: l.elapsed }).catch(() => ({ error: "offline" }));
     },
     [workout.id],
   );
@@ -132,52 +141,142 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
   }, [persist]);
 
   const elapsedSec = elapsedNow / 1000;
-  const restLeft = restEnd ? Math.max(0, Math.ceil((restEnd - now) / 1000)) : 0;
+  const restLeft = restEnd ? Math.max(0, Math.ceil((restEnd - effNow) / 1000)) : 0;
   const resting = restEnd !== null;
 
   // Buzz once when rest ends.
   useEffect(() => {
-    if (resting && restLeft === 0 && !buzzed.current) {
+    if (resting && !paused && restLeft === 0 && !buzzed.current) {
       buzzed.current = true;
       navigator.vibrate?.([200, 100, 200]);
     }
-  }, [resting, restLeft]);
+  }, [resting, paused, restLeft]);
 
   const goFinish = useCallback(() => {
     setMinutes(String(Math.max(1, Math.round(latest.current.elapsed / 60000))));
     setFinished(true);
   }, []);
 
+  function advanceTo(nextLogs: SetLog[], nextIndex: number, rest: number) {
+    setLogs(nextLogs);
+    setSetRpeVal("");
+    setEditing(false);
+    latest.current = { ...latest.current, logs: nextLogs };
+    if (nextIndex >= steps.length) return goFinish();
+    void persist({ logs: nextLogs, stepIndex: nextIndex });
+    if (rest > 0) {
+      buzzed.current = false;
+      setRestEnd(Date.now() + rest * 1000);
+    } else setRestEnd(null);
+    const next = prefill(nextIndex, nextLogs);
+    setReps(next.reps);
+    setWeight(next.weight);
+    setStepIndex(nextIndex);
+  }
+
   function completeSet() {
     if (!step) return;
     const r = reps.trim() === "" ? null : Number(reps);
     const w = weight.trim() === "" ? null : Number(weight);
-    const nextLogs = [
-      ...logs,
-      { exercise: step.exercise, set_number: step.setNumber, reps: Number.isFinite(r) ? r : null, weight_lb: Number.isFinite(w) ? w : null, rpe: setRpeVal === "" ? null : Number(setRpeVal) },
-    ];
-    setLogs(nextLogs);
-    setSetRpeVal("");
     navigator.vibrate?.(30);
-    latest.current = { ...latest.current, logs: nextLogs };
-    if (stepIndex >= steps.length - 1) return goFinish();
-    void persist({ logs: nextLogs, stepIndex: stepIndex + 1 });
-    if (step.restAfter > 0) {
-      buzzed.current = false;
-      setRestEnd(Date.now() + step.restAfter * 1000);
-    }
-    const next = prefill(stepIndex + 1, nextLogs);
-    setReps(next.reps);
-    setWeight(next.weight);
-    setStepIndex((i) => i + 1);
+    advanceTo(
+      [...logs, { exercise: step.exercise, set_number: step.setNumber, reps: Number.isFinite(r) ? r : null, weight_lb: Number.isFinite(w) ? w : null, rpe: setRpeVal === "" ? null : Number(setRpeVal) }],
+      stepIndex + 1,
+      step.restAfter,
+    );
   }
 
-  function nextBlock() {
+  /** Records the set as skipped (kept in history) and moves on without resting. */
+  function skipSet() {
+    if (!step) return;
+    advanceTo([...logs, skippedLog(step)], stepIndex + 1, 0);
+  }
+
+  function skipExercise() {
+    if (!step) return;
+    const skipped = skipExerciseLogs(steps, stepIndex);
+    advanceTo([...logs, ...skipped], stepIndex + skipped.length, 0);
+  }
+
+  /** Back one set, with its values restored so they can be edited and saved again. */
+  function goBack() {
+    if (mode === "sets") {
+      if (stepIndex === 0) return;
+      const aligned = logs.length >= stepIndex;
+      const prev = aligned ? logs[stepIndex - 1] : undefined;
+      const nextLogs = aligned ? logs.slice(0, stepIndex - 1) : logs;
+      const target = stepIndex - 1;
+      setLogs(nextLogs);
+      latest.current = { ...latest.current, logs: nextLogs };
+      setRestEnd(null);
+      setEditing(false);
+      const fresh = prefill(target, nextLogs);
+      setReps(prev && !prev.skipped && prev.reps !== null ? String(prev.reps) : fresh.reps);
+      setWeight(prev && !prev.skipped && prev.weight_lb !== null ? String(prev.weight_lb) : fresh.weight);
+      setSetRpeVal(prev?.rpe ? String(prev.rpe) : "");
+      setStepIndex(target);
+      void persist({ logs: nextLogs, stepIndex: target });
+    } else if (mode === "blocks") {
+      if (blockIndex === 0) return;
+      const nextBlocks = blockLogs.slice(0, blockIndex - 1);
+      setBlockLogs(nextBlocks);
+      latest.current = { ...latest.current, blocks: nextBlocks };
+      setBlockIndex(blockIndex - 1);
+      setBlockStart(Date.now());
+      void persist({ blocks: nextBlocks, blockIndex: blockIndex - 1 });
+    }
+  }
+
+  function startEdit() {
+    const last = logs[logs.length - 1];
+    if (!last || last.skipped) return;
+    setEReps(last.reps !== null ? String(last.reps) : "");
+    setEWeight(last.weight_lb !== null ? String(last.weight_lb) : "");
+    setERpe(last.rpe ? String(last.rpe) : "");
+    setEditing(true);
+  }
+
+  function saveEdit() {
+    const r = eReps.trim() === "" ? null : Number(eReps);
+    const w = eWeight.trim() === "" ? null : Number(eWeight);
+    const nextLogs = logs.map((l, i) =>
+      i === logs.length - 1 ? { ...l, reps: r !== null && Number.isFinite(r) ? r : null, weight_lb: w !== null && Number.isFinite(w) ? w : null, rpe: eRpe === "" ? null : Number(eRpe) } : l,
+    );
+    setLogs(nextLogs);
+    latest.current = { ...latest.current, logs: nextLogs };
+    setEditing(false);
+    void persist({ logs: nextLogs });
+  }
+
+  function finishBlock(skip: boolean) {
+    const b = blocks[blockIndex];
+    const entry: BlockLog = { name: b.name, seconds: skip ? null : Math.round((effNow - blockStart) / 1000), skipped: skip };
+    const nextBlocks = [...blockLogs, entry];
+    setBlockLogs(nextBlocks);
+    latest.current = { ...latest.current, blocks: nextBlocks };
     navigator.vibrate?.(30);
     if (blockIndex >= blocks.length - 1) return goFinish();
-    void persist({ blockIndex: blockIndex + 1 });
+    void persist({ blocks: nextBlocks, blockIndex: blockIndex + 1 });
     setBlockIndex((i) => i + 1);
     setBlockStart(Date.now());
+  }
+
+  function pause() {
+    if (paused) return;
+    const t = Date.now();
+    setBaseMs(elapsedAt(baseMs, segmentStart, t));
+    setSegmentStart(null);
+    setPausedAt(t);
+  }
+
+  function resume() {
+    if (pausedAt === null) return;
+    const t = Date.now();
+    const gap = t - pausedAt;
+    setSegmentStart(t);
+    if (restEnd !== null) setRestEnd(restEnd + gap);
+    setBlockStart((b) => b + gap);
+    setPausedAt(null);
   }
 
   async function save() {
@@ -193,6 +292,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
       distanceKm: distance === "" ? null : Number(distance) * 1.609344,
       avgHr: avgHr === "" ? null : Number(avgHr),
       avgPower: avgPower === "" ? null : Number(avgPower),
+      blocks: blockLogs,
     });
     if (res.error) {
       setError(res.error);
@@ -221,8 +321,40 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
       <main className="mx-auto w-full max-w-md px-5 py-8">
         <h1 className="text-2xl font-semibold tracking-tight">Nice work</h1>
         <p className="mt-1 text-zinc-400">
-          {workout.title} &middot; {logs.length} set{logs.length === 1 ? "" : "s"} logged
+          {workout.title} &middot;{" "}
+          {mode === "sets"
+            ? `${countSets(logs).done} set${countSets(logs).done === 1 ? "" : "s"} logged${countSets(logs).skipped ? `, ${countSets(logs).skipped} skipped` : ""}`
+            : mode === "blocks"
+              ? `${blockLogs.filter((b) => !b.skipped).length} of ${blocks.length} blocks done${blockLogs.some((b) => b.skipped) ? `, ${blockLogs.filter((b) => b.skipped).length} skipped` : ""}`
+              : `${fmt(elapsedSec)} elapsed`}
         </p>
+        {mode === "sets" && logs.length > 0 && (
+          <ul className="mt-4 space-y-2 text-sm">
+            {recap(logs).map((r) => (
+              <li key={r.exercise} className="rounded-xl border border-zinc-800 px-3 py-2">
+                <p className="font-medium">{r.exercise}</p>
+                <p className="text-zinc-400">
+                  {r.lines.map((l, i) => (
+                    <span key={i} className={l === "skipped" ? "text-amber-400" : ""}>
+                      {i > 0 ? " · " : ""}
+                      {l}
+                    </span>
+                  ))}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+        {mode === "blocks" && blockLogs.length > 0 && (
+          <ul className="mt-4 space-y-2 text-sm">
+            {blockLogs.map((b, i) => (
+              <li key={i} className="flex justify-between rounded-xl border border-zinc-800 px-3 py-2">
+                <span>{b.name}</span>
+                <span className={b.skipped ? "text-amber-400" : "tabular-nums text-zinc-400"}>{b.skipped ? "skipped" : fmt(b.seconds ?? 0)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="mt-6 space-y-3">
           <label className="block text-sm text-zinc-400">
             Duration (min)
@@ -275,11 +407,34 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
     );
   }
 
+  // ----------------------------------------------------------------- paused
+  if (paused) {
+    return (
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
+        <header className="flex items-center justify-between">
+          <button onClick={quit} className="text-sm text-zinc-400 active:text-zinc-200">
+            Quit
+          </button>
+          <p className="truncate text-sm text-zinc-400">{workout.title}</p>
+          <span className="w-12" />
+        </header>
+        <div className="flex flex-1 flex-col items-center justify-center text-center">
+          <p className="text-sm uppercase tracking-widest text-amber-400">Paused</p>
+          <p className="mt-2 text-7xl font-semibold tabular-nums text-zinc-300">{fmt(elapsedSec)}</p>
+          <p className="mt-4 text-sm text-zinc-500">The workout and rest timers are stopped.</p>
+        </div>
+        <button onClick={resume} className={`${btnPrimary} py-4 text-lg`}>
+          Resume
+        </button>
+      </main>
+    );
+  }
+
   // ------------------------------------------------------------------- rest
   if (mode === "sets" && resting && step) {
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
-        <Header title={workout.title} elapsed={elapsedSec} onQuit={quit} />
+        <Header title={workout.title} elapsed={elapsedSec} onQuit={quit} onPause={pause} />
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <p className="text-sm uppercase tracking-widest text-zinc-500">{restLeft === 0 ? "Go" : "Rest"}</p>
           <p className={`mt-2 text-8xl font-semibold tabular-nums ${restLeft === 0 ? "text-emerald-400" : ""}`}>{fmt(restLeft)}</p>
@@ -287,7 +442,50 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
             Next: {step.exercise}, set {step.setNumber} of {step.totalSets}
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        {logs.length > 0 && !logs[logs.length - 1].skipped && (
+          <div className="mb-3 rounded-xl border border-zinc-800 px-3 py-2 text-sm">
+            {editing ? (
+              <div className="space-y-2">
+                <p className="text-zinc-400">Edit {logs[logs.length - 1].exercise}, set {logs[logs.length - 1].set_number}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <input value={eReps} onChange={(e) => setEReps(e.target.value)} type="number" inputMode="numeric" placeholder="Reps" className={field} aria-label="Reps" />
+                  <input value={eWeight} onChange={(e) => setEWeight(e.target.value)} type="number" inputMode="decimal" step="any" placeholder="lb" className={field} aria-label="Weight" />
+                  <select value={eRpe} onChange={(e) => setERpe(e.target.value)} className={field} aria-label="RPE">
+                    <option value="">RPE</option>
+                    {[6, 7, 8, 9, 10].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setEditing(false)} className={btnGhost}>
+                    Cancel
+                  </button>
+                  <button onClick={saveEdit} className={btnPrimary}>
+                    Save set
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">
+                  Last set: {logs[logs.length - 1].weight_lb !== null ? `${logs[logs.length - 1].weight_lb} × ` : ""}
+                  {logs[logs.length - 1].reps ?? "-"}
+                  {logs[logs.length - 1].rpe ? ` @${logs[logs.length - 1].rpe}` : ""}
+                </span>
+                <button onClick={startEdit} className="text-emerald-400">
+                  Edit
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="grid grid-cols-3 gap-3">
+          <button onClick={goBack} className={btnGhost}>
+            ‹ Back
+          </button>
           <button onClick={() => setRestEnd((e) => (e ?? Date.now()) + 15000)} className={btnGhost}>
             +15 s
           </button>
@@ -304,7 +502,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
     const nextUp = steps[stepIndex + 1];
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
-        <Header title={workout.title} elapsed={elapsedSec} onQuit={quit} />
+        <Header title={workout.title} elapsed={elapsedSec} onQuit={quit} onPause={pause} />
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
           <div className="h-full bg-emerald-500" style={{ width: `${(stepIndex / steps.length) * 100}%` }} />
         </div>
@@ -356,6 +554,19 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
         <button onClick={completeSet} className={`${btnPrimary} py-4 text-lg`}>
           {stepIndex >= steps.length - 1 ? "Finish" : "Done set"}
         </button>
+        <div className={`mt-3 grid gap-3 ${workout.structure?.rounds ? "grid-cols-2" : "grid-cols-3"}`}>
+          <button onClick={goBack} disabled={stepIndex === 0} className={btnGhost}>
+            ‹ Back
+          </button>
+          <button onClick={skipSet} className={btnGhost}>
+            Skip set
+          </button>
+          {!workout.structure?.rounds && (
+            <button onClick={skipExercise} className={btnGhost}>
+              Skip exercise
+            </button>
+          )}
+        </div>
       </main>
     );
   }
@@ -363,10 +574,10 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
   // ----------------------------------------------------------------- blocks
   if (mode === "blocks") {
     const b = blocks[blockIndex];
-    const blockSec = (now - blockStart) / 1000;
+    const blockSec = (effNow - blockStart) / 1000;
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
-        <Header title={workout.title} elapsed={elapsedSec} onQuit={quit} />
+        <Header title={workout.title} elapsed={elapsedSec} onQuit={quit} onPause={pause} />
         <p className="mt-2 text-sm text-zinc-500">
           Block {blockIndex + 1} of {blocks.length}
         </p>
@@ -381,9 +592,17 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
           </p>
         </div>
         {blocks[blockIndex + 1] && <p className="mb-3 text-center text-sm text-zinc-500">Next: {blocks[blockIndex + 1].name}</p>}
-        <button onClick={nextBlock} className={`${btnPrimary} py-4 text-lg`}>
+        <button onClick={() => finishBlock(false)} className={`${btnPrimary} py-4 text-lg`}>
           {blockIndex >= blocks.length - 1 ? "Finish" : "Next block"}
         </button>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <button onClick={goBack} disabled={blockIndex === 0} className={btnGhost}>
+            ‹ Back
+          </button>
+          <button onClick={() => finishBlock(true)} className={btnGhost}>
+            Skip block
+          </button>
+        </div>
       </main>
     );
   }
@@ -391,7 +610,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
   // ------------------------------------------------------------------ timer
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
-      <Header title={workout.title} elapsed={null} onQuit={quit} />
+      <Header title={workout.title} elapsed={null} onQuit={quit} onPause={pause} />
       <div className="flex flex-1 flex-col items-center justify-center text-center">
         {workout.description && <p className="mb-8 whitespace-pre-line text-zinc-400">{workout.description}</p>}
         <p className="text-8xl font-semibold tabular-nums">{fmt(elapsedSec)}</p>
@@ -403,14 +622,19 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
   );
 }
 
-function Header({ title, elapsed, onQuit }: { title: string; elapsed: number | null; onQuit: () => void }) {
+function Header({ title, elapsed, onQuit, onPause }: { title: string; elapsed: number | null; onQuit: () => void; onPause: () => void }) {
   return (
     <header className="flex items-center justify-between gap-3">
       <button onClick={onQuit} className="text-sm text-zinc-400 active:text-zinc-200">
         Quit
       </button>
-      <p className="truncate text-sm text-zinc-400">{title}</p>
-      <p className="w-12 text-right text-sm tabular-nums text-zinc-400">{elapsed === null ? "" : fmt(elapsed)}</p>
+      <p className="min-w-0 flex-1 truncate text-center text-sm text-zinc-400">{title}</p>
+      <div className="flex items-center gap-3">
+        <button onClick={onPause} className="rounded-lg border border-zinc-700 px-2.5 py-1 text-sm text-zinc-200 active:bg-zinc-800">
+          Pause
+        </button>
+        <p className="w-11 text-right text-sm tabular-nums text-zinc-400">{elapsed === null ? "" : fmt(elapsed)}</p>
+      </div>
     </header>
   );
 }

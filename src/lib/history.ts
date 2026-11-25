@@ -4,6 +4,7 @@ export type SetRow = {
   reps: number | null;
   weight_lb: number | null;
   rpe: number | null;
+  skipped?: boolean;
   workout_id: string;
   workouts: { workout_date: string; title: string } | { workout_date: string; title: string }[] | null;
 };
@@ -23,7 +24,7 @@ export function sessionsFor(rows: SetRow[], exercise: string): Session[] {
     if (!w) continue;
     const s = by.get(r.workout_id) ?? { workoutId: r.workout_id, date: w.workout_date, title: w.title, sets: [], topWeight: null, e1rm: null, volume: 0 };
     s.sets.push(r);
-    if (r.weight_lb !== null) {
+    if (!r.skipped && r.weight_lb !== null) {
       s.topWeight = Math.max(s.topWeight ?? 0, Number(r.weight_lb));
       if (r.reps !== null && r.reps > 0 && r.reps <= 12) s.e1rm = Math.max(s.e1rm ?? 0, epley(Number(r.weight_lb), r.reps));
       s.volume += Number(r.weight_lb) * (r.reps ?? 0);

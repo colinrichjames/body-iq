@@ -22,7 +22,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const [{ data: setRows }, { data: cardio }, { data: partial }] = await Promise.all([
     supabase
       .from("workout_sets")
-      .select("exercise,set_number,reps,weight_lb,rpe,workout_id,workouts(workout_date,title)")
+      .select("exercise,set_number,reps,weight_lb,rpe,skipped,workout_id,workouts(workout_date,title)")
       .order("created_at", { ascending: false })
       .limit(3000)
       .returns<SetRow[]>(),
@@ -87,7 +87,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                       <span className="text-zinc-500">{s.title}</span>
                     </Link>
                     <p className="mt-1 text-sm tabular-nums text-zinc-300">
-                      {s.sets.map((r) => `${r.weight_lb !== null ? `${Number(r.weight_lb)}×` : ""}${r.reps ?? "-"}${r.rpe ? ` @${r.rpe}` : ""}`).join("  ·  ")}
+                      {s.sets.map((r) => (r.skipped ? "skipped" : `${r.weight_lb !== null ? `${Number(r.weight_lb)}×` : ""}${r.reps ?? "-"}${r.rpe ? ` @${r.rpe}` : ""}`)).join("  ·  ")}
                     </p>
                   </li>
                 ))}

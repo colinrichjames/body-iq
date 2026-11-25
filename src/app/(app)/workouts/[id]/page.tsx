@@ -10,6 +10,8 @@ import { looksMerged } from "@/lib/structure";
 import { sessionUnits } from "@/lib/steps";
 import { progressLabel } from "@/lib/progress";
 import { StatusBadge } from "@/components/status-badge";
+import { recap } from "@/lib/player";
+import type { WorkoutSet } from "@/lib/types";
 import { field } from "@/components/ui";
 import { attachActivity, deleteWorkout, duplicateWorkout, moveWorkout, setStatus } from "../actions";
 import { garminSport } from "@/lib/sport";
@@ -54,6 +56,13 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
     doneSets = count ?? 0;
   }
   const inProgress = w.status === "in_progress";
+  let loggedSets: WorkoutSet[] = [];
+  if (w.status === "completed" || w.status === "in_progress") {
+    const { data: ls } = await supabase.from("workout_sets").select("*").eq("workout_id", w.id).order("created_at").returns<WorkoutSet[]>();
+    loggedSets = ls ?? [];
+  }
+  const recapRows = recap(loggedSets.map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped })));
+  const blockRows = w.status === "completed" || w.status === "in_progress" ? (w.status === "in_progress" ? (w.progress?.blocks ?? []) : (w.block_results ?? [])) : [];
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -109,6 +118,43 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
               </li>
             ))}
           </ol>
+        </section>
+      )}
+
+      {recapRows.length > 0 && (
+        <section className={`${card} mt-5`}>
+          <h2 className="text-sm text-zinc-400">{inProgress ? "Logged so far" : "What you did"}</h2>
+          <ul className="mt-2 space-y-2 text-sm">
+            {recapRows.map((r) => (
+              <li key={r.exercise}>
+                <p className="font-medium">{r.exercise}</p>
+                <p className="text-zinc-400">
+                  {r.lines.map((l, i) => (
+                    <span key={i} className={l === "skipped" ? "text-amber-400" : ""}>
+                      {i > 0 ? " · " : ""}
+                      {l}
+                    </span>
+                  ))}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {blockRows.length > 0 && (
+        <section className={`${card} mt-5`}>
+          <h2 className="text-sm text-zinc-400">{inProgress ? "Blocks so far" : "Block results"}</h2>
+          <ul className="mt-2 divide-y divide-zinc-800 text-sm">
+            {blockRows.map((b, i) => (
+              <li key={i} className="flex justify-between py-2">
+                <span>{b.name}</span>
+                <span className={b.skipped ? "text-amber-400" : "tabular-nums text-zinc-400"}>
+                  {b.skipped ? "skipped" : `${Math.floor((b.seconds ?? 0) / 60)}:${String((b.seconds ?? 0) % 60).padStart(2, "0")}`}
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
