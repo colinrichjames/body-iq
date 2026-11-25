@@ -8,7 +8,8 @@ import { computeInsights, SCORE_NAME } from "@/lib/insights";
 import { raceLabel } from "@/lib/plan";
 import { phaseInfo, planStartFrom } from "@/lib/race-phase";
 import { raceDayCard } from "@/lib/race-day";
-import { getToday } from "@/lib/today";
+import { getTimeZone, getToday } from "@/lib/today";
+import { dueReminders, hourIn } from "@/lib/reminders";
 import { computeReadiness } from "@/lib/readiness";
 import { fuelForDay } from "@/lib/fuel";
 import { classify } from "@/lib/intensity";
@@ -77,6 +78,14 @@ export default async function DashboardPage() {
   const readiness = computeReadiness(healthRes.data ?? []);
   const lastSync = syncRes.data?.[0] ?? null;
   const todayFuel = (nutritionRes.data ?? []).find((d) => d.day === today) ?? null;
+  // The Today card already lists planned sessions, so only the nudges it doesn't cover are shown here.
+  const reminders = dueReminders({
+    today,
+    hour: hourIn(await getTimeZone()),
+    todays,
+    caloriesToday: todayFuel?.calories ?? 0,
+    lastScanDay: scans[0]?.scanned_at?.slice(0, 10) ?? null,
+  }).filter((r) => !r.key.startsWith("today-"));
   const fuelTargets = targetsFor(today, workouts, profileRes.data ?? null);
   const weightKg = latest?.weight_lb ? latest.weight_lb * 0.45359237 : null;
   const dayFuel = fuelForDay(today, workouts, weightKg, nextRace?.race_date ?? null, nextRace?.race_type ?? null);
@@ -157,6 +166,17 @@ export default async function DashboardPage() {
               Move it
             </button>
           </form>
+        </section>
+      )}
+
+      {reminders.length > 0 && (
+        <section className="mt-6 space-y-2" aria-label="Reminders">
+          {reminders.map((r) => (
+            <Link key={r.key} href={r.href} className="flex items-center justify-between gap-3 rounded-2xl border border-amber-900/60 bg-amber-950/20 px-4 py-3 text-sm">
+              <span className="text-amber-200">{r.text}</span>
+              <span className="shrink-0 font-medium text-amber-400">{r.action} &rsaquo;</span>
+            </Link>
+          ))}
         </section>
       )}
 

@@ -12,6 +12,7 @@ import { applyOrder, moveExercise, queueOverview, stepKey } from "@/lib/queue";
 import { fmtPace, fromKm, paceProblem, toKm, type DistUnit } from "@/lib/distance";
 import { fmtTime } from "@/lib/hyrox";
 import { countSets, recap, totalVolume, volumeByExercise, skipExerciseLogs, skippedLog } from "@/lib/player";
+import { prepareOffline } from "@/lib/offline";
 import { finishWorkout, saveProgress } from "../../actions";
 
 type Resume = { logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; elapsedMs: number; order?: string[]; totals?: Record<string, number> };
@@ -215,6 +216,13 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     },
     [workout.id, toast],
   );
+  // Save this screen for offline reloads, and retry the server copy as soon as the connection is back.
+  useEffect(() => {
+    prepareOffline();
+    const onOnline = () => void persist();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [persist]);
   useEffect(() => {
     const onHide = () => document.visibilityState === "hidden" && void persist();
     document.addEventListener("visibilitychange", onHide);
@@ -425,7 +433,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
       fluidMl: fluidMl === "" ? null : Number(fluidMl),
       sodiumMg: sodiumMg === "" ? null : Number(sodiumMg),
       blocks: blockLogs,
-    });
+    }).catch(() => ({ error: "You're offline. Your workout is safe on this phone. Tap Save workout again when you have signal.", message: undefined as string | undefined }));
     if (res.error) {
       setError(res.error);
       setSaving(false);

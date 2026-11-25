@@ -50,6 +50,31 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section className={`${card} mt-5`}>
+        <h2 className="font-medium">Reminders</h2>
+        <p className="mt-1 text-sm text-zinc-400">
+          Body IQ can&apos;t send alerts while it&apos;s closed. Your calendar can: download your planned sessions and races, and each session gets an alert at the time you pick. Re-download after you rebuild a plan; sessions update rather than duplicate.
+        </p>
+        <form action="/export" method="get" className="mt-3 flex items-end gap-3">
+          <input type="hidden" name="type" value="calendar" />
+          <label className="flex-1 text-sm text-zinc-400">
+            Alert time
+            <input type="time" name="time" defaultValue="07:00" required className="mt-1 w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-base outline-none focus:border-emerald-500" />
+          </label>
+          <button type="submit" className={btnPrimary}>
+            Get calendar file
+          </button>
+        </form>
+        <p className="mt-2 text-xs text-zinc-500">The home screen also reminds you when a session is in progress, when nothing is logged by evening, and when a body scan is two weeks old.</p>
+      </section>
+
+      <section className={`${card} mt-5`}>
+        <h2 className="font-medium">Install on your phone</h2>
+        <p className="mt-1 text-sm text-zinc-400">
+          iPhone: open Body IQ in Safari, tap Share, then Add to Home Screen. Android: open the browser menu and choose Install app. It opens full screen, and the workout screen keeps working without signal: sets are kept on your phone and saved when you&apos;re back online.
+        </p>
+      </section>
+
+      <section className={`${card} mt-5`}>
         <h2 className="font-medium">Your data</h2>
         <p className="mt-1 text-sm text-zinc-400">Download everything Body IQ has stored for you.</p>
         <ul className="mt-2 space-y-1 text-sm">
@@ -73,6 +98,21 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               Food log (CSV)
             </a>
           </li>
+          {[
+            ["scans", "Body scans"],
+            ["nutrition", "Nutrition days"],
+            ["hydration", "Water"],
+            ["races", "Races"],
+            ["benchmarks", "Hyrox benchmarks"],
+            ["activities", "Garmin activities"],
+            ["health", "Garmin daily health"],
+          ].map(([t, label]) => (
+            <li key={t}>
+              <a href={`/export?type=${t}`} className="text-emerald-400 underline">
+                {label} (CSV)
+              </a>
+            </li>
+          ))}
         </ul>
       </section>
     </main>
