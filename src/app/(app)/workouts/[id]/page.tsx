@@ -83,7 +83,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       {s?.exercises && s.exercises.length > 0 && (
         <section className={`${card} mt-5`}>
           <h2 className="text-sm text-zinc-400">
-            {s.rounds ? `${s.rounds} rounds, rest ${s.rest_sec ?? 60}s between rounds` : "Exercises"}
+            {s.rounds ? `${s.rounds} rounds, rest ${s.rest_sec ?? 75}s between rounds` : "Exercises"}
           </h2>
           <ul className="mt-2 divide-y divide-zinc-800">
             {s.exercises.map((e, i) => (

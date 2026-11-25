@@ -9,6 +9,7 @@ vi.mock("../../actions", () => ({ saveProgress: (...a: unknown[]) => saveProgres
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 import { Assistant } from "./assistant";
+import { buildSteps } from "@/lib/steps";
 
 const strength = {
   id: "w1",
@@ -112,6 +113,35 @@ describe("strength player", () => {
     expect(screen.getByText("0:50")).toBeTruthy();
     act(() => vi.advanceTimersByTime(5_000));
     expect(screen.getByText("0:45")).toBeTruthy();
+  });
+});
+
+describe("rest timer", () => {
+  it("auto-advances about 3 s after rest ends (default on)", () => {
+    mount(strength);
+    click(/done set/i);
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByText("Go")).toBeTruthy();
+    act(() => vi.advanceTimersByTime(3_100));
+    expect(screen.queryByText("Go")).toBeNull();
+    expect(screen.getByText(/set 2 of 3/i)).toBeTruthy();
+  });
+
+  it("with auto-advance off, counts overtime up and waits", () => {
+    localStorage.setItem("bodyiq-auto-advance-rest", "off");
+    mount(strength);
+    click(/done set/i);
+    act(() => vi.advanceTimersByTime(67_000));
+    expect(screen.getByText("+0:07")).toBeTruthy();
+    act(() => vi.advanceTimersByTime(20_000));
+    expect(screen.getByText("+0:27")).toBeTruthy();
+  });
+
+  it("uses a longer default rest between exercises than between sets", () => {
+    const w = { ...strength, structure: { exercises: strength.structure!.exercises } } as unknown as Workout;
+    const steps = buildSteps(w);
+    expect(steps[0].restAfter).toBe(75);
+    expect(steps[2].restAfter).toBe(120);
   });
 });
 
