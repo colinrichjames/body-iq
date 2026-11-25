@@ -12,6 +12,10 @@ import { sessionUnits } from "@/lib/steps";
 import { progressLabel } from "@/lib/progress";
 import { StatusBadge } from "@/components/status-badge";
 import { recap } from "@/lib/player";
+import { loadDeload } from "@/lib/progression-data";
+import { mergeCheckins } from "@/lib/readiness";
+import { DeloadNotice } from "@/components/deload-notice";
+import type { DailyHealth, RecoveryCheckin } from "@/lib/types";
 import { sessionInsights, type SessionInsights } from "@/lib/session-insights";
 import { prText } from "@/lib/lifting";
 import { GYM_READY, isStale, isSwapped, stationsIn } from "@/lib/hyrox-swaps";
@@ -71,6 +75,14 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       w,
       loggedSets.map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped })),
     ).catch(() => insights);
+  }
+  let deloadCheck: Awaited<ReturnType<typeof loadDeload>> = { level: "none", reasons: [], exercises: [] };
+  if (w.status === "planned" && w.sport === "strength") {
+    const [{ data: hrows }, { data: crows }] = await Promise.all([
+      supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(14).returns<DailyHealth[]>(),
+      supabase.from("recovery_checkins").select("day,sleep_hours,soreness,energy").order("day", { ascending: false }).limit(14).returns<RecoveryCheckin[]>(),
+    ]);
+    deloadCheck = await loadDeload(supabase, today, mergeCheckins(hrows ?? [], crows ?? []));
   }
   const recapRows = recap(loggedSets.map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped, note: r.note })));
   const exSteps = buildSteps(w);
@@ -219,6 +231,8 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
           </ul>
         </section>
       )}
+
+      <DeloadNotice check={deloadCheck} />
 
       {insights.next.length > 0 && (
         <section className={`${card} mt-5`}>
