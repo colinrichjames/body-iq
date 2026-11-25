@@ -71,7 +71,7 @@ export function WeekBoard({ days, today, workouts }: { days: string[]; today: st
                     </span>
                     <Link
                       href={`/workouts/${w.id}`}
-                      className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 active:bg-zinc-800"
+                      className={`flex min-w-0 flex-1 items-center justify-between gap-3 rounded-xl border px-4 py-3 active:bg-zinc-800 ${w.status === "skipped" ? "border-rose-500/30 bg-rose-500/5" : "border-zinc-800 bg-zinc-900/40"}`}
                     >
                       <div className="min-w-0">
                         <p className={`truncate font-medium ${w.status === "skipped" ? "text-zinc-500 line-through" : ""}`}>{w.title}</p>

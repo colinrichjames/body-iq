@@ -5,9 +5,10 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { flash } from "@/lib/flash";
 import { toTrash, withUndo } from "@/lib/trash";
-import { isIsoDate } from "@/lib/dates";
+import { addDays, isIsoDate } from "@/lib/dates";
 import { parseDuration } from "@/lib/hyrox";
 import { generatePlan, RACE_TYPES } from "@/lib/plan";
+import { planSummary, type PlanResult } from "@/lib/plan-summary";
 import { getToday } from "@/lib/today";
 import type { Race, RaceType } from "@/lib/types";
 
@@ -16,7 +17,7 @@ function fail(message: string): never {
 }
 
 /** Replaces this race's not-yet-done generated workouts from today on with a fresh plan. */
-async function applyPlan(race: Race): Promise<{ removed: number; added: number }> {
+async function applyPlan(race: Race): Promise<PlanResult> {
   const { supabase, userId } = await requireUser();
   const today = await getToday();
   if (race.race_date < today) fail("That race date has already passed.");
@@ -52,15 +53,18 @@ async function applyPlan(race: Race): Promise<{ removed: number; added: number }
     fail(e instanceof Error ? e.message : "Could not generate a plan.");
   }
 
-  const rows = planned
-    .filter((w) => !taken.has(w.workout_date))
+  const kept = planned.filter((w) => !taken.has(w.workout_date));
+  const skippedDays = new Set(planned.filter((w) => taken.has(w.workout_date)).map((w) => w.workout_date)).size;
+  const rows = kept
     .map((w) => ({ ...w, user_id: userId, race_id: race.id, generated: true, status: "planned" }));
 
   for (let i = 0; i < rows.length; i += 200) {
     const { error } = await supabase.from("workouts").insert(rows.slice(i, i + 200));
     if (error) fail(error.message);
   }
-  return { removed: removedRows?.length ?? 0, added: rows.length };
+  const dates = rows.map((r) => r.workout_date).sort();
+  const weeks = new Set(rows.map((r) => addDays(r.workout_date, -((new Date(r.workout_date + "T00:00:00Z").getUTCDay() + 6) % 7)))).size;
+  return { removed: removedRows?.length ?? 0, added: rows.length, skippedDays, first: dates[0] ?? null, last: dates.at(-1) ?? null, weeks };
 }
 
 export async function addRace(formData: FormData) {
@@ -86,10 +90,10 @@ export async function addRace(formData: FormData) {
     .single<Race>();
   if (error || !data) fail(error?.message ?? "Could not save the race.");
 
-  if (formData.get("generate") === "on") await applyPlan(data);
+  const result = formData.get("generate") === "on" ? await applyPlan(data) : null;
 
   revalidatePath("/", "layout");
-  redirect(flash("/races", "Race added and plan built."));
+  redirect(flash("/races", result ? planSummary(result, "built") : "Race added. No plan built yet."));
 }
 
 export async function regeneratePlan(formData: FormData) {
@@ -97,9 +101,9 @@ export async function regeneratePlan(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const { data } = await supabase.from("races").select("*").eq("id", id).single<Race>();
   if (!data) fail("Race not found.");
-  await applyPlan(data);
+  const result = await applyPlan(data);
   revalidatePath("/", "layout");
-  redirect(flash("/races", "Plan rebuilt."));
+  redirect(flash("/races", planSummary(result, "rebuilt")));
 }
 
 export async function deleteRace(formData: FormData) {
