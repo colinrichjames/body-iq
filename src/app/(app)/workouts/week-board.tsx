@@ -8,6 +8,7 @@ import { formatDay } from "@/lib/dates";
 import { SPORT_NAME } from "@/lib/sport";
 import { useDragMove } from "@/components/use-drag-move";
 import { StatusBadge } from "@/components/status-badge";
+import { MoveControl } from "@/components/move-control";
 import { rescheduleWorkout } from "./actions";
 
 export type BoardWorkout = { id: string; date: string; title: string; sport: string; status: string; minutes: number | null };
@@ -46,7 +47,7 @@ export function WeekBoard({ days, today, workouts }: { days: string[]; today: st
   return (
     <div className="mt-4 space-y-4">
       {error && <p className="rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
-      <p className="text-xs text-zinc-600">Drag a session by its handle to move it to another day.</p>
+      <p className="text-xs text-zinc-600">Drag a session by its handle, or press Move, to put it on another day.</p>
       {days.map((day) => {
         const list = items.filter((w) => w.date === day);
         const isToday = day === today;
@@ -61,7 +62,7 @@ export function WeekBoard({ days, today, workouts }: { days: string[]; today: st
             ) : (
               <ul className="mt-1 space-y-2">
                 {list.map((w) => (
-                  <li key={w.id} className={`flex items-stretch gap-1 ${dragging === w.id ? "opacity-40" : ""}`}>
+                  <li key={w.id} className={`flex flex-wrap items-stretch gap-1 ${dragging === w.id ? "opacity-40" : ""}`}>
                     <span
                       {...grip(w.id, w.title, day)}
                       aria-label={`Drag ${w.title}`}
@@ -82,6 +83,7 @@ export function WeekBoard({ days, today, workouts }: { days: string[]; today: st
                       </div>
                       <StatusBadge status={w.status} overdue={day < today} />
                     </Link>
+                    <MoveControl title={w.title} current={w.date} onMove={(d) => void move(w.id, d)} />
                   </li>
                 ))}
               </ul>

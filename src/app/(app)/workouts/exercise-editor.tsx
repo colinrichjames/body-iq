@@ -1,5 +1,6 @@
 "use client";
 
+import { Field } from "@/components/field";
 import { useState } from "react";
 import { btnGhost, field } from "@/components/ui";
 import { parseExercises } from "@/lib/structure";
@@ -54,18 +55,18 @@ export function ExerciseEditor({ initial }: { initial: Exercise[] }) {
       {rows.map((r, i) => (
         <div key={r.key} className="rounded-xl border border-zinc-800 p-2">
           <div className="flex gap-2">
-            <input value={r.name} onChange={(e) => update(r.key, { name: e.target.value })} placeholder={`Exercise ${i + 1}, e.g. Back squat`} className={field} />
-            <button type="button" onClick={() => setRows((cur) => (cur.length > 1 ? cur.filter((x) => x.key !== r.key) : [blank()]))} className="shrink-0 px-2 text-sm text-zinc-500 active:text-red-400" aria-label={`Remove exercise ${i + 1}`}>
+            <Field label={`Exercise ${i + 1}`} className="min-w-0 flex-1"><input value={r.name} onChange={(e) => update(r.key, { name: e.target.value })} placeholder="e.g. Back squat" className={field} /></Field>
+            <button type="button" onClick={() => setRows((cur) => (cur.length > 1 ? cur.filter((x) => x.key !== r.key) : [blank()]))} className="shrink-0 self-end px-2 py-2.5 text-sm text-zinc-500 active:text-red-400" aria-label={`Remove exercise ${i + 1}`}>
               Remove
             </button>
           </div>
           <div className="mt-2 grid grid-cols-4 gap-2">
-            <input value={r.sets} onChange={(e) => update(r.key, { sets: e.target.value })} type="number" inputMode="numeric" min="1" placeholder="Sets" className={field} />
-            <input value={r.amount} onChange={(e) => update(r.key, { amount: e.target.value })} type="number" inputMode="numeric" min="1" placeholder={r.timed ? "Seconds" : "Reps"} className={field} />
-            <button type="button" onClick={() => update(r.key, { timed: !r.timed })} className={`${btnGhost} px-1 text-xs`}>
+            <Field label="Sets"><input value={r.sets} onChange={(e) => update(r.key, { sets: e.target.value })} type="number" inputMode="numeric" min="1" className={field} /></Field>
+            <Field label={r.timed ? "Seconds" : "Reps"}><input value={r.amount} onChange={(e) => update(r.key, { amount: e.target.value })} type="number" inputMode="numeric" min="1" className={field} /></Field>
+            <button type="button" onClick={() => update(r.key, { timed: !r.timed })} className={`${btnGhost} self-end px-1 text-xs`} aria-label={`Switch to ${r.timed ? "reps" : "timed"}`}>
               {r.timed ? "Timed" : "Reps"}
             </button>
-            <input value={r.weight} onChange={(e) => update(r.key, { weight: e.target.value })} type="number" inputMode="decimal" step="any" min="0" placeholder="lb" className={field} />
+            <Field label="Weight (lb)"><input value={r.weight} onChange={(e) => update(r.key, { weight: e.target.value })} type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
           </div>
         </div>
       ))}

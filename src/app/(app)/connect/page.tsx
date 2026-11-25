@@ -145,6 +145,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
           autoCapitalize="none"
           spellCheck={false}
           required
+          aria-label="Garmin personal API key"
           placeholder="Paste your Garmin personal API key"
           className={field}
         />

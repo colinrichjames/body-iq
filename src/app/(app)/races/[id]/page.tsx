@@ -10,6 +10,7 @@ import type { HyroxBenchmark, Race } from "@/lib/types";
 import { btnGhost, card, field } from "@/components/ui";
 import { addBenchmark, deleteBenchmark } from "../actions";
 import { PlanImporter } from "./plan-importer";
+import { Field } from "@/components/field";
 
 export default async function RacePage({
   params,
@@ -145,10 +146,10 @@ export default async function RacePage({
                 ))}
               </select>
               <div className="grid grid-cols-2 gap-3">
-                <input name="time" placeholder="Time, e.g. 4:45" required className={field} />
+                <Field label="Time"><input name="time" placeholder="e.g. 4:45" required className={field} /></Field>
                 <input name="effort_date" type="date" defaultValue={today} required className={field} />
               </div>
-              <input name="notes" placeholder="Notes: weight, pace, conditions (optional)" className={field} />
+              <Field label="Notes (optional)"><input name="notes" placeholder="Weight, pace, conditions" className={field} /></Field>
               <button type="submit" className={`${btnGhost} w-full`}>
                 Log effort
               </button>

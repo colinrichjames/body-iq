@@ -495,7 +495,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
               ))}
             </select>
           </label>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Notes" className={field} />
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Notes" aria-label="Session notes" className={field} />
           {error && <p className="rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
           <button onClick={save} disabled={saving} className={`${btnPrimary} w-full`}>
             {saving ? "Saving..." : "Save workout"}
