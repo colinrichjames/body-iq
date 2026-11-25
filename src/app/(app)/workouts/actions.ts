@@ -7,7 +7,8 @@ import { addDays, isIsoDate } from "@/lib/dates";
 import { classify } from "@/lib/intensity";
 import { nextEasyDay } from "@/lib/stacking";
 import { getToday } from "@/lib/today";
-import type { Workout } from "@/lib/types";
+import { buildStructure, parseExercises } from "@/lib/structure";
+import type { Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
 
 const SPORTS: Sport[] = ["strength", "run", "bike", "swim", "hyrox", "mobility", "other"];
@@ -42,6 +43,7 @@ export async function addWorkout(formData: FormData) {
     title,
     description: String(formData.get("description") ?? "").trim() || null,
     planned_duration_min: numOrNull(formData.get("planned_duration_min")),
+    structure: buildStructure(null, parseExercises(String(formData.get("exercises") ?? "")), numOrNull(formData.get("rounds")), numOrNull(formData.get("rest_sec"))),
     generated: false,
     status: "planned",
   });
@@ -154,4 +156,70 @@ export async function swapHardSession(formData: FormData) {
   for (const e of easyThere) await supabase.from("workouts").update({ workout_date: today }).eq("id", e.id);
   refresh();
   redirect(`/dashboard?notice=${encodeURIComponent(`Moved "${target.title}" to ${to}${easyThere.length ? ` and brought ${easyThere.map((e) => `"${e.title}"`).join(", ")} to today` : ""}.`)}`);
+}
+
+/** Customize a session. Edited sessions become yours (generated=false) so plan re-alignment never overwrites them. */
+export async function updateWorkout(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const back = (m: string) => redirect(`/workouts/${id}/edit?error=${encodeURIComponent(m)}`);
+  const title = String(formData.get("title") ?? "").trim();
+  const sport = String(formData.get("sport") ?? "") as Sport;
+  const date = String(formData.get("workout_date") ?? "");
+  if (!title) back("Give the workout a title.");
+  if (!SPORTS.includes(sport)) back("Pick a sport.");
+  if (!isIsoDate(date)) back("Pick a date.");
+
+  const { data: prev } = await supabase.from("workouts").select("structure").eq("id", id).maybeSingle<{ structure: WorkoutStructure | null }>();
+  const structure = buildStructure(
+    prev?.structure ?? null,
+    parseExercises(String(formData.get("exercises") ?? "")),
+    numOrNull(formData.get("rounds")),
+    numOrNull(formData.get("rest_sec")),
+  );
+  const { error } = await supabase
+    .from("workouts")
+    .update({
+      title,
+      sport,
+      workout_date: date,
+      description: String(formData.get("description") ?? "").trim() || null,
+      planned_duration_min: numOrNull(formData.get("planned_duration_min")),
+      structure,
+      generated: false,
+    })
+    .eq("id", id);
+  if (error) back(error.message);
+  refresh();
+  revalidatePath("/workouts/calendar");
+  redirect(`/workouts/${id}`);
+}
+
+/** Copy a session to another day (planned, not generated). */
+export async function duplicateWorkout(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const date = String(formData.get("date") ?? "");
+  if (!isIsoDate(date)) redirect(`/workouts/${id}?error=${encodeURIComponent("Pick a valid date.")}`);
+  const { data: w } = await supabase.from("workouts").select("*").eq("id", id).maybeSingle<Workout>();
+  if (!w) redirect("/workouts");
+  const { data: copy, error } = await supabase
+    .from("workouts")
+    .insert({
+      user_id: userId,
+      workout_date: date,
+      sport: w.sport,
+      title: w.title,
+      description: w.description,
+      planned_duration_min: w.planned_duration_min,
+      structure: w.structure,
+      generated: false,
+      status: "planned",
+    })
+    .select("id")
+    .single<{ id: string }>();
+  if (error || !copy) redirect(`/workouts/${id}?error=${encodeURIComponent(error?.message ?? "Copy failed.")}`);
+  refresh();
+  revalidatePath("/workouts/calendar");
+  redirect(`/workouts/${copy.id}`);
 }

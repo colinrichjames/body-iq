@@ -6,7 +6,7 @@ import type { Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, card } from "@/components/ui";
 import { sessionFuel } from "@/lib/fuel";
 import { field } from "@/components/ui";
-import { deleteWorkout, moveWorkout, setStatus } from "../actions";
+import { deleteWorkout, duplicateWorkout, moveWorkout, setStatus } from "../actions";
 
 export default async function WorkoutPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
@@ -126,6 +126,16 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
             <input name="date" type="date" defaultValue={w.workout_date} className={`${field} !w-auto flex-1`} />
             <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
               Move
+            </button>
+          </form>
+          <Link href={`/workouts/${w.id}/edit`} className={`${btnGhost} px-3 py-2 text-sm`}>
+            Customize
+          </Link>
+          <form action={duplicateWorkout} className="flex w-full items-center gap-2">
+            <input type="hidden" name="id" value={w.id} />
+            <input name="date" type="date" defaultValue={w.workout_date} className={`${field} !w-auto flex-1`} />
+            <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
+              Copy to date
             </button>
           </form>
           <form action={deleteWorkout}>
