@@ -45,7 +45,7 @@ const fmt = (totalSec: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-export function Assistant({ workout, lastWeights, lastTime, serverResume, targets = {}, targetRace = null, lastVolume = {}, suggested = {}, deload = false, lastEndurance = null, plannedDistanceKm = null, distanceUnit = "mi" }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; serverResume: Resume | null; targets?: Record<string, number>; targetRace?: string | null; lastVolume?: Record<string, number>; suggested?: Record<string, { weight: number; text: string }>; deload?: boolean; lastEndurance?: { date: string; km: number | null; minutes: number | null } | null; plannedDistanceKm?: number | null; distanceUnit?: DistUnit }) {
+export function Assistant({ workout, lastWeights, lastTime, serverResume, targets = {}, targetRace = null, lastVolume = {}, suggested = {}, deload = false, adaptation = null, initialTotals = null, lastEndurance = null, plannedDistanceKm = null, distanceUnit = "mi" }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; serverResume: Resume | null; targets?: Record<string, number>; targetRace?: string | null; lastVolume?: Record<string, number>; suggested?: Record<string, { weight: number; text: string }>; deload?: boolean; adaptation?: { headline: string; reasons: string[]; mode: string } | null; initialTotals?: Record<string, number> | null; lastEndurance?: { date: string; km: number | null; minutes: number | null } | null; plannedDistanceKm?: number | null; distanceUnit?: DistUnit }) {
   const router = useRouter();
   const { toast } = useToast();
   const warned = useRef(false);
@@ -67,7 +67,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     return pickResume(serverResume, local);
   });
   // Sets per exercise when changed during the session (null = as planned).
-  const [totals, setTotals] = useState<Record<string, number> | null>(() => saved?.totals ?? null);
+  const [totals, setTotals] = useState<Record<string, number> | null>(() => saved?.totals ?? (saved ? null : initialTotals));
   const baseSteps = useMemo(() => buildSteps(workout, totals), [workout, totals]);
   const mode: "sets" | "blocks" | "timer" = baseSteps.length ? "sets" : blocks.length ? "blocks" : "timer";
   // Elapsed time only counts while this screen is open: saved time plus this visit.
@@ -759,6 +759,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
             </button>
           </div>
           {lastTime[step.exercise] && <p className="mt-1 text-sm text-emerald-400/80">Last time: {lastTime[step.exercise]}</p>}
+          {adaptation && adaptation.mode !== "as_planned" && logs.length === 0 && <p className="mt-1 text-sm text-amber-400">{adaptation.headline}. {adaptation.reasons.join(" ")}</p>}
           {suggested[step.exercise] && <p className="mt-1 text-sm text-sky-400/90">{deload ? "Deload: " : "Suggested: "}{suggested[step.exercise].text}</p>}
 
           <div className="mt-6 grid grid-cols-2 gap-3">
