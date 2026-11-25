@@ -14,7 +14,7 @@ import { fmtTime } from "@/lib/hyrox";
 import { countSets, recap, totalVolume, volumeByExercise, skipExerciseLogs, skippedLog } from "@/lib/player";
 import { finishWorkout, saveProgress } from "../../actions";
 
-type Resume = { logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; elapsedMs: number; order?: string[] };
+type Resume = { logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; elapsedMs: number; order?: string[]; totals?: Record<string, number> };
 
 const AUTO_KEY = "bodyiq-auto-advance-rest";
 const GO_MS = 3000;
@@ -48,9 +48,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const router = useRouter();
   const { toast } = useToast();
   const warned = useRef(false);
-  const baseSteps = useMemo(() => buildSteps(workout), [workout]);
   const blocks = workout.structure?.blocks ?? [];
-  const mode: "sets" | "blocks" | "timer" = baseSteps.length ? "sets" : blocks.length ? "blocks" : "timer";
 
   const draftKey = `bodyiq-draft-${workout.id}`;
   const [now, setNow] = useState(() => Date.now());
@@ -60,13 +58,17 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     try {
       const d = JSON.parse(localStorage.getItem(draftKey) ?? "null");
       if (d && Array.isArray(d.logs)) {
-        local = { logs: d.logs, blocks: Array.isArray(d.blocks) ? d.blocks : [], stepIndex: Number(d.stepIndex) || 0, blockIndex: Number(d.blockIndex) || 0, elapsedMs: typeof d.elapsedMs === "number" ? d.elapsedMs : 0, order: Array.isArray(d.order) ? d.order.filter((k: unknown) => typeof k === "string") : undefined };
+        local = { logs: d.logs, blocks: Array.isArray(d.blocks) ? d.blocks : [], stepIndex: Number(d.stepIndex) || 0, blockIndex: Number(d.blockIndex) || 0, elapsedMs: typeof d.elapsedMs === "number" ? d.elapsedMs : 0, order: Array.isArray(d.order) ? d.order.filter((k: unknown) => typeof k === "string") : undefined, totals: d.totals && typeof d.totals === "object" ? d.totals : undefined };
       }
     } catch {
       // storage unavailable
     }
     return pickResume(serverResume, local);
   });
+  // Sets per exercise when changed during the session (null = as planned).
+  const [totals, setTotals] = useState<Record<string, number> | null>(() => saved?.totals ?? null);
+  const baseSteps = useMemo(() => buildSteps(workout, totals), [workout, totals]);
+  const mode: "sets" | "blocks" | "timer" = baseSteps.length ? "sets" : blocks.length ? "blocks" : "timer";
   // Elapsed time only counts while this screen is open: saved time plus this visit.
   const [baseMs, setBaseMs] = useState(saved?.elapsedMs ?? 0);
   const [segmentStart, setSegmentStart] = useState<number | null>(() => Date.now());
@@ -181,26 +183,26 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   })();
 
   const elapsedNow = elapsedAt(baseMs, segmentStart, now);
-  const latest = useRef({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow, order });
+  const latest = useRef({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow, order, totals });
   useEffect(() => {
-    latest.current = { logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow, order };
+    latest.current = { logs, blocks: blockLogs, stepIndex, blockIndex, elapsed: elapsedNow, order, totals };
   });
 
   // Never lose a session: keep progress on the phone until it is saved (heartbeat every 5 s).
   const beat = Math.floor(now / 5000);
   useEffect(() => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsedMs: latest.current.elapsed, order }));
+      localStorage.setItem(draftKey, JSON.stringify({ logs, blocks: blockLogs, stepIndex, blockIndex, elapsedMs: latest.current.elapsed, order, totals }));
     } catch {
       // storage unavailable
     }
-  }, [draftKey, logs, blockLogs, stepIndex, blockIndex, order, beat]);
+  }, [draftKey, logs, blockLogs, stepIndex, blockIndex, order, totals, beat]);
 
   // Also keep it on the server so the session shows as in progress everywhere.
   const persist = useCallback(
-    (over?: Partial<{ logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; order: string[] | null }>) => {
+    (over?: Partial<{ logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; order: string[] | null; totals: Record<string, number> | null }>) => {
       const l = latest.current;
-      return saveProgress({ id: workout.id, sets: over?.logs ?? l.logs, blocks: over?.blocks ?? l.blocks, stepIndex: over?.stepIndex ?? l.stepIndex, blockIndex: over?.blockIndex ?? l.blockIndex, elapsedMs: l.elapsed, order: (over?.order !== undefined ? over.order : l.order) ?? undefined })
+      return saveProgress({ id: workout.id, sets: over?.logs ?? l.logs, blocks: over?.blocks ?? l.blocks, stepIndex: over?.stepIndex ?? l.stepIndex, blockIndex: over?.blockIndex ?? l.blockIndex, elapsedMs: l.elapsed, order: (over?.order !== undefined ? over.order : l.order) ?? undefined, totals: (over?.totals !== undefined ? over.totals : l.totals) ?? undefined })
         .catch(() => ({ error: "offline" }))
         .then((res) => {
           // Tell the user once per outage; the draft stays on this phone and the next save retries.
@@ -283,6 +285,18 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     if (!step) return;
     const skipped = skipExerciseLogs(steps, stepIndex);
     advanceTo([...logs, ...skipped], stepIndex + skipped.length, 0);
+  }
+
+  /** Adds or removes a set of an exercise that is still in progress. Logged sets are never removed. */
+  function changeSets(exercise: string, delta: number) {
+    const total = steps.find((s) => s.exercise === exercise)?.totalSets ?? 0;
+    const logged = logs.filter((l) => l.exercise === exercise).length;
+    const next = total + delta;
+    if (next < logged + 1 || next > 20) return;
+    const t = { ...(totals ?? {}), [exercise]: next };
+    setTotals(t);
+    latest.current = { ...latest.current, totals: t };
+    void persist({ totals: t });
   }
 
   /** Moves one exercise to the front ("next") or back ("later") of what is left, e.g. when its machine is taken. */
@@ -714,6 +728,18 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
             {step.weight ? ` @ ${step.weight} lb${isDumbbell(step.exercise) ? " each" : ""}` : ""}
           </p>
           {step.note && <p className="mt-1 text-sm text-zinc-500">{step.note}</p>}
+          <div className="mt-3 flex items-center gap-3 text-sm text-zinc-400">
+            <span>Sets for this exercise</span>
+            <button type="button" onClick={() => changeSets(step.exercise, -1)} disabled={step.totalSets <= logs.filter((l) => l.exercise === step.exercise).length + 1} aria-label="Remove a set" className="h-9 w-9 rounded-lg border border-zinc-700 text-lg text-zinc-200 disabled:opacity-30">
+              &minus;
+            </button>
+            <span className="w-6 text-center text-lg tabular-nums text-zinc-100" aria-live="polite">
+              {step.totalSets}
+            </span>
+            <button type="button" onClick={() => changeSets(step.exercise, 1)} disabled={step.totalSets >= 20} aria-label="Add a set" className="h-9 w-9 rounded-lg border border-zinc-700 text-lg text-zinc-200 disabled:opacity-30">
+              +
+            </button>
+          </div>
           {lastTime[step.exercise] && <p className="mt-1 text-sm text-emerald-400/80">Last time: {lastTime[step.exercise]}</p>}
 
           <div className="mt-6 grid grid-cols-2 gap-3">

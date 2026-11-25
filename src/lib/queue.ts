@@ -17,11 +17,16 @@ function withRest(steps: Step[]): Step[] {
 export function applyOrder(steps: Step[], order: string[] | null | undefined): Step[] {
   if (!order?.length) return steps;
   const rank = new Map(order.map((k, i) => [k, i]));
-  const sorted = steps
-    .map((s, i) => ({ s, i }))
-    .sort((a, b) => (rank.get(stepKey(a.s)) ?? order.length + a.i) - (rank.get(stepKey(b.s)) ?? order.length + b.i))
-    .map((x) => x.s);
-  return withRest(sorted);
+  const known = steps.filter((s) => rank.has(stepKey(s))).sort((a, b) => rank.get(stepKey(a))! - rank.get(stepKey(b))!);
+  // A set added after the order was saved joins the end of its own exercise.
+  for (const s of steps.filter((x) => !rank.has(stepKey(x)))) {
+    let at = -1;
+    known.forEach((k, i) => {
+      if (k.exercise === s.exercise) at = i;
+    });
+    known.splice(at < 0 ? known.length : at + 1, 0, s);
+  }
+  return withRest(known);
 }
 
 /** Moves the not-yet-done sets of one exercise to the front ("next") or the back ("later") of what is left. */

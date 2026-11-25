@@ -38,6 +38,17 @@ describe("applyOrder", () => {
   });
 });
 
+describe("sets changed mid-session", () => {
+  it("a new set joins the end of its own exercise in a saved order", () => {
+    const order = moveExercise(buildSteps(w), 0, "A", "later").map(stepKey);
+    const more = buildSteps(w, { B: 3 });
+    expect(names(applyOrder(more, order))).toBe("B1 B2 B3 C1 A1 A2");
+  });
+  it("fewer sets drop the highest-numbered one", () => {
+    expect(names(buildSteps(w, { A: 1 }))).toBe("A1 B1 B2 C1");
+  });
+});
+
 describe("queueOverview", () => {
   it("lists what is left first and counts done and skipped sets", () => {
     const steps = moveExercise(buildSteps(w), 0, "B", "next");

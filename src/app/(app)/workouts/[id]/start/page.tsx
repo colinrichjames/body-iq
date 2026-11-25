@@ -49,6 +49,7 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
           blockIndex: w.progress.blockIndex,
           elapsedMs: w.progress.elapsedMs,
           order: w.progress.order,
+          totals: w.progress.totals,
         }
       : null;
 
