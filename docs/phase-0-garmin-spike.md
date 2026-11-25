@@ -14,7 +14,7 @@ The database side is ready: `activities`, `daily_health` and `sync_runs` exist w
 Sources: [Personal API](https://developer.garmin.com/gc-developer-program/personal/personal-api), [Personal API FAQ](https://developer.garmin.com/gc-developer-program/personal/personal-faq/).
 
 ## Steps for you
-1. Create the key. Do not paste it into chat or commit it.
+1. Create the key (the in-app guide at /connect walks through it; pick the 365-day expiry). Do not paste it into chat or commit it.
 2. Store it as a Supabase secret: Dashboard, Edge Functions, Secrets, name `GARMIN_API_KEY`.
 3. Open the Swagger docs from the Garmin developer site and note the paths for: activities, daily summaries, sleep, HRV, Body Battery, stress, resting HR, any nutrition scope, backfill range, rate limits.
 4. In MyFitnessPal, check that Garmin is connected under Apps and Devices, then look at Garmin Connect for daily calories consumed.

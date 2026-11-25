@@ -130,7 +130,12 @@ export default async function DashboardPage() {
           Garmin sync:{" "}
           {lastSync
             ? `${lastSync.status === "success" ? "last success" : lastSync.status} ${new Date(lastSync.finished_at ?? lastSync.started_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${lastSync.error ? `, ${lastSync.error}` : ""}`
-            : "not connected yet"}
+            : "not connected yet"}{" "}
+          {!lastSync && (
+            <Link href="/connect" className="text-emerald-400">
+              Set up
+            </Link>
+          )}
         </p>
       </section>
 
