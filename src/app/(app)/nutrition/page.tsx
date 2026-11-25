@@ -79,7 +79,7 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
         dateField="day"
         existingDays={rows.filter((d) => (d.calories ?? 0) > 0).map((d) => d.day)}
         windowStart={since}
-        message={(day) => `Replace what's already logged for ${formatDay(day)}? This overwrites that day's totals.`}
+        message="Replace what's already logged for {day}? This overwrites that day's totals."
       >
         <h2 className="font-medium">Quick add a day</h2>
         <p className="text-sm text-zinc-500">Type in a day&apos;s totals. Replaces anything already logged for that date.</p>
