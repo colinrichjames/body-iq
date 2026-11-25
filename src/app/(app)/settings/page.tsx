@@ -107,6 +107,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             ["activities", "Garmin activities"],
             ["health", "Garmin daily health"],
             ["checkins", "Recovery check-ins"],
+            ["weighins", "Weigh-ins"],
           ].map(([t, label]) => (
             <li key={t}>
               <a href={`/export?type=${t}`} className="text-emerald-400 underline">

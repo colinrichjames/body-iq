@@ -12,6 +12,8 @@ import { getTimeZone, getToday } from "@/lib/today";
 import { dueReminders, hourIn } from "@/lib/reminders";
 import { computeReadiness, mergeCheckins } from "@/lib/readiness";
 import { loadDeload } from "@/lib/progression-data";
+import { CoachCard } from "@/components/coach-card";
+import { loadCoach } from "@/lib/coach-data";
 import { DeloadNotice } from "@/components/deload-notice";
 import { CheckinCard } from "@/components/checkin-card";
 import { fuelForDay } from "@/lib/fuel";
@@ -83,6 +85,7 @@ export default async function DashboardPage() {
   const todaysCheckin = (checkinRes.data ?? []).find((c) => c.day === today) ?? null;
   const readiness = computeReadiness(health);
   const deloadCheck = await loadDeload(supabase, today, health);
+  const coach = await loadCoach(supabase, today, profileRes.data ?? null);
   const lastSync = syncRes.data?.[0] ?? null;
   const todayFuel = (nutritionRes.data ?? []).find((d) => d.day === today) ?? null;
   // The Today card already lists planned sessions, so only the nudges it doesn't cover are shown here.
@@ -235,6 +238,8 @@ export default async function DashboardPage() {
         </p>
         {dayFuel.note && <p className="mt-2 text-xs text-zinc-400">{dayFuel.note}</p>}
       </section>
+
+      <CoachCard coach={coach} today={today} from="/dashboard" />
 
       <section className="mt-4 rounded-2xl border border-zinc-800 p-5">
         <h2 className="text-sm text-zinc-400">Readiness</h2>

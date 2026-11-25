@@ -150,6 +150,9 @@ export type Profile = {
   rest_carbs_g: number | null;
   rest_fat_g: number | null;
   onboarding_dismissed_at: string | null;
+  goal_mode: "lose" | "maintain" | "gain" | null;
+  goal_rate_lb_week: number | null;
+  coach_checked_at: string | null;
 };
 
 export type HyroxBenchmark = {
@@ -190,3 +193,5 @@ export type SyncRun = {
   error: string | null;
   detail: { endpoints?: { name: string; status: number | string; count?: number }[] } | null;
 };
+
+export type WeighIn = { user_id?: string; day: string; weight_lb: number };
