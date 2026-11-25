@@ -35,7 +35,9 @@ In Supabase > Authentication > URL Configuration:
 - **Site URL:** `https://body-iq-five.vercel.app`
 - **Redirect URLs:** add `https://body-iq-five.vercel.app/**`, `http://localhost:3000/**`, and your Vercel preview wildcard (for example `https://body-iq-*-<your-vercel-team>.vercel.app/**`).
 
-### 4. Email template (recommended for mobile)
+### 4. Email template (recommended for mobile; needs custom SMTP)
+Supabase only allows editing email templates after custom SMTP is set up (Authentication > Emails > SMTP Settings, for example with Resend). Until then the default link is used, which works only in the browser that requested it. The default sender is also rate-limited and only delivers to project team members, so set up SMTP before inviting anyone else.
+
 The default magic link only works in the same browser that requested it. On a phone, the link often opens in a different in-app browser, so use the token-hash flow instead. In Supabase > Authentication > Email Templates > **Magic Link**, change the link to:
 
 ```html
