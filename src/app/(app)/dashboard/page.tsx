@@ -76,11 +76,16 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Body IQ</p>
           <p className="mt-1 truncate text-sm text-zinc-500">{isGuest ? "Guest" : email}</p>
         </div>
-        <form action={signOut}>
-          <button type="submit" className="text-sm text-zinc-400 active:text-zinc-200">
-            {isGuest ? "Leave guest session" : "Sign out"}
-          </button>
-        </form>
+        <div className="flex items-center gap-4">
+          <Link href="/settings" className="text-sm text-zinc-400 active:text-zinc-200">
+            Settings
+          </Link>
+          <form action={signOut}>
+            <button type="submit" className="text-sm text-zinc-400 active:text-zinc-200">
+              {isGuest ? "Leave guest session" : "Sign out"}
+            </button>
+          </form>
+        </div>
       </header>
 
       {isGuest && (

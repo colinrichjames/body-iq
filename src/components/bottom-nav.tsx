@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 
 const ITEMS = [
@@ -10,6 +10,11 @@ const ITEMS = [
   { href: "/nutrition", label: "Fuel" },
   { href: "/scans", label: "Body" },
 ];
+
+function Pending() {
+  const { pending } = useLinkStatus();
+  return pending ? <span aria-hidden className="ml-1 inline-block h-3 w-3 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent align-middle" /> : null;
+}
 
 export function BottomNav() {
   const pathname = usePathname();
@@ -26,6 +31,7 @@ export function BottomNav() {
                 className={`block py-3.5 text-center text-sm ${active ? "font-medium text-emerald-400" : "text-zinc-400"}`}
               >
                 {item.label}
+                <Pending />
               </Link>
             </li>
           );

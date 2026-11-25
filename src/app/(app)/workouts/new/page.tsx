@@ -1,5 +1,8 @@
+import { SubmitButton } from "@/components/submit-button";
 import Link from "next/link";
 import { getToday } from "@/lib/today";
+import { requireUser } from "@/lib/auth";
+import type { Profile } from "@/lib/types";
 import { btnPrimary, field } from "@/components/ui";
 import { addWorkout } from "../actions";
 import { ExerciseEditor } from "../exercise-editor";
@@ -7,6 +10,9 @@ import { ExerciseEditor } from "../exercise-editor";
 export default async function NewWorkoutPage({ searchParams }: { searchParams: Promise<{ error?: string; date?: string }> }) {
   const { error, date } = await searchParams;
   const today = await getToday();
+  const { supabase, userId } = await requireUser();
+  const { data: profile } = await supabase.from("profiles").select("unit_system").eq("id", userId).maybeSingle<Pick<Profile, "unit_system">>();
+  const defaultUnit = profile?.unit_system === "metric" ? "km" : "mi";
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
       <Link href="/workouts" className="text-sm text-zinc-400">
@@ -30,7 +36,7 @@ export default async function NewWorkoutPage({ searchParams }: { searchParams: P
         </div>
         <div className="grid grid-cols-[1fr_auto] gap-3">
           <input name="planned_distance" type="number" inputMode="decimal" step="any" min="0" defaultValue={""} placeholder="Distance (optional)" className={field} aria-label="Planned distance" />
-          <select name="distance_unit" defaultValue={"mi"} className={field} aria-label="Distance unit">
+          <select name="distance_unit" defaultValue={defaultUnit} className={field} aria-label="Distance unit">
             <option value="mi">mi</option>
             <option value="km">km</option>
           </select>
@@ -42,9 +48,7 @@ export default async function NewWorkoutPage({ searchParams }: { searchParams: P
           <input name="rounds" type="number" inputMode="numeric" min="1" placeholder="Circuit rounds (optional)" className={field} />
           <input name="rest_sec" type="number" inputMode="numeric" min="0" placeholder="Rest seconds" className={field} />
         </div>
-        <button type="submit" className={`${btnPrimary} w-full`}>
-          Save workout
-        </button>
+        <SubmitButton className={`${btnPrimary} w-full`}>Save workout</SubmitButton>
       </form>
     </main>
   );

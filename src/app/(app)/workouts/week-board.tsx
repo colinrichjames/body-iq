@@ -16,6 +16,8 @@ export function WeekBoard({ days, today, workouts }: { days: string[]; today: st
   const [error, setError] = useState<string | null>(null);
 
   const move = useCallback(async (id: string, day: string) => {
+    const moving = items.find((w) => w.id === id);
+    if (moving?.status === "completed" && !window.confirm(`Move this completed workout to ${formatDay(day, { weekday: true })}? This changes your history.`)) return;
     setError(null);
     let prev: string | null = null;
     setItems((cur) => cur.map((w) => (w.id === id ? ((prev = w.date), { ...w, date: day }) : w)));
@@ -24,7 +26,7 @@ export function WeekBoard({ days, today, workouts }: { days: string[]; today: st
       setError(res.error);
       setItems((cur) => cur.map((w) => (w.id === id && prev ? { ...w, date: prev } : w)));
     }
-  }, []);
+  }, [items]);
   const { grip, over, dragging, ghost } = useDragMove(move);
 
   return (
