@@ -1,0 +1,70 @@
+// @vitest-environment jsdom
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const actions = vi.hoisted(() => ({
+  addFoodEntries: vi.fn(async () => ({ error: null, added: 2 })),
+  addFoodEntry: vi.fn(),
+  copyDay: vi.fn(async () => ({ error: null, added: 3 })),
+  copyMeal: vi.fn(async () => ({ error: null, added: 1 })),
+  deleteSavedFood: vi.fn(),
+  logSavedFood: vi.fn(async () => ({ error: null, added: 1 })),
+  saveFoodSet: vi.fn(),
+}));
+vi.mock("./actions", () => actions);
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+vi.mock("./scanner", () => ({ Scanner: () => null }));
+import { FoodAdder } from "./food-adder";
+import type { MealItem, SavedFood } from "@/lib/meals";
+
+const item = (name: string, calories: number): MealItem => ({ name, brand: null, amount_label: null, calories, protein_g: 10, carbs_g: 20, fat_g: 5, sodium_mg: null, sugar_g: null, fiber_g: null });
+const recipe: SavedFood = { id: "r1", kind: "recipe", name: "Chili", portions: 4, items: [item("Beans", 400), item("Beef", 1000)] };
+
+const mount = () => render(<FoodAdder day="2026-11-25" recents={[item("Eggs", 150), item("Oats", 200)]} frequent={[{ item: item("Oats", 200), count: 5 }]} favourites={[{ id: "f1", kind: "favorite", name: "Protein shake", portions: 1, items: [item("Shake", 160)] }]} meals={[recipe]} />);
+
+describe("FoodAdder tabs", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(cleanup);
+
+  it("shows the five tabs", () => {
+    mount();
+    for (const t of ["Search", "Recent", "Frequent", "Favourites", "Meals"]) expect(screen.getByRole("tab", { name: t })).toBeTruthy();
+  });
+
+  it("adds several recent foods together", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("tab", { name: "Recent" }));
+    fireEvent.click(screen.getByLabelText("Select Eggs"));
+    fireEvent.click(screen.getByLabelText("Select Oats"));
+    fireEvent.click(screen.getByRole("button", { name: /Add 2 to/ }));
+    await waitFor(() => expect(actions.addFoodEntries).toHaveBeenCalledTimes(1));
+    const [day, , items] = actions.addFoodEntries.mock.calls[0] as unknown as [string, string, MealItem[]];
+    expect(day).toBe("2026-11-25");
+    expect(items.map((i) => i.name).sort()).toEqual(["Eggs", "Oats"]);
+  });
+
+  it("logs a recipe with the portions eaten", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("tab", { name: "Meals" }));
+    expect(screen.getByText(/Recipe · 4 portions · 350 cal each/)).toBeTruthy();
+    fireEvent.change(screen.getByRole("spinbutton", { name: /Portions/ }), { target: { value: "1.5" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Add to / }));
+    await waitFor(() => expect(actions.logSavedFood).toHaveBeenCalled());
+    const args = actions.logSavedFood.mock.calls[0] as unknown as [string, string, string, number];
+    expect(args[0]).toBe("r1");
+    expect(args[3]).toBe(1.5);
+  });
+
+  it("copies yesterday's whole day by default", async () => {
+    mount();
+    fireEvent.click(screen.getByRole("tab", { name: "Meals" }));
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await waitFor(() => expect(actions.copyDay).toHaveBeenCalledWith("2026-11-24", "2026-11-25"));
+  });
+
+  it("lists favourites", () => {
+    mount();
+    fireEvent.click(screen.getByRole("tab", { name: "Favourites" }));
+    expect(screen.getByText("Protein shake")).toBeTruthy();
+  });
+});
