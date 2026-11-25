@@ -10,6 +10,8 @@ import { Importer } from "./importer";
 import { DraftForm } from "@/components/draft-form";
 import { SubmitButton } from "@/components/submit-button";
 import { Field } from "@/components/field";
+import { CoachCard } from "@/components/coach-card";
+import { loadCoach } from "@/lib/coach-data";
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
@@ -24,6 +26,7 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
     supabase.from("nutrition_days").select("*").gte("day", since).order("day", { ascending: false }).returns<NutritionDay[]>(),
     supabase.from("workouts").select("*").gte("workout_date", since).lte("workout_date", today).returns<Workout[]>(),
   ]);
+  const coach = await loadCoach(supabase, today, profile ?? null);
   const workouts = wk ?? [];
   const rows = days ?? [];
   const week = rows.filter((d) => d.day >= addDays(today, -6) && (d.calories ?? 0) > 0);
@@ -44,6 +47,8 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
     <main className="mx-auto w-full max-w-md px-5 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Nutrition</h1>
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
+
+      <CoachCard coach={coach} today={today} from="/nutrition" />
 
       <section className={`${card} mt-5`}>
         <h2 className="text-sm text-zinc-400">Average vs target</h2>
