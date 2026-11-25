@@ -14,18 +14,19 @@ function fail(message: string): never {
 }
 
 /** Replaces this race's not-yet-done generated workouts from today on with a fresh plan. */
-async function applyPlan(race: Race) {
+async function applyPlan(race: Race): Promise<{ removed: number; added: number }> {
   const { supabase, userId } = await requireUser();
   const today = await getToday();
   if (race.race_date < today) fail("That race date has already passed.");
 
-  const { error: delError } = await supabase
+  const { data: removedRows, error: delError } = await supabase
     .from("workouts")
     .delete()
     .eq("race_id", race.id)
     .eq("generated", true)
     .eq("status", "planned")
-    .gte("workout_date", today);
+    .gte("workout_date", today)
+    .select("id");
   if (delError) fail(delError.message);
 
   // Don't pile onto days where the user already has something (their own sessions or another plan).
@@ -43,6 +44,7 @@ async function applyPlan(race: Race) {
       raceName: race.name,
       raceDate: race.race_date,
       startDate: today,
+      priority: race.priority,
     });
   } catch (e) {
     fail(e instanceof Error ? e.message : "Could not generate a plan.");
@@ -56,6 +58,7 @@ async function applyPlan(race: Race) {
     const { error } = await supabase.from("workouts").insert(rows.slice(i, i + 200));
     if (error) fail(error.message);
   }
+  return { removed: removedRows?.length ?? 0, added: rows.length };
 }
 
 export async function addRace(formData: FormData) {
@@ -66,7 +69,7 @@ export async function addRace(formData: FormData) {
   const location = String(formData.get("location") ?? "").trim() || null;
   const goal = String(formData.get("goal") ?? "").trim() || null;
 
-  const priority = String(formData.get("priority") ?? "B");
+  const priority = String(formData.get("priority") ?? "A");
   const goalRaw = String(formData.get("goal_time") ?? "").trim();
   const goalSec = goalRaw ? parseDuration(goalRaw) : null;
   if (goalRaw && goalSec === null) fail("Goal time should look like 1:20:00 or 80 (minutes).");
@@ -179,4 +182,36 @@ export async function importPlanRows(raceId: string, rows: PlanCsvRow[]): Promis
   revalidatePath("/races");
   revalidatePath("/dashboard");
   return { error: null, count: clean.length };
+}
+
+/**
+ * Realign after missed sessions (Runna-style): skip what was missed, or skip it and rebuild the
+ * rest of the plan back from race day. Reports what changed.
+ */
+export async function realignPlan(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const mode = String(formData.get("mode") ?? "skip");
+  const today = await getToday();
+  const { data: race } = await supabase.from("races").select("*").eq("id", id).single<Race>();
+  if (!race) fail("Race not found.");
+
+  const { data: skipped } = await supabase
+    .from("workouts")
+    .update({ status: "skipped" })
+    .eq("race_id", id)
+    .eq("status", "planned")
+    .lt("workout_date", today)
+    .select("id");
+  const nSkipped = skipped?.length ?? 0;
+
+  let message = `Marked ${nSkipped} missed session${nSkipped === 1 ? "" : "s"} as skipped. The rest of the plan is unchanged.`;
+  if (mode === "rebuild") {
+    const { removed, added } = await applyPlan(race);
+    message = `Marked ${nSkipped} missed session${nSkipped === 1 ? "" : "s"} as skipped, removed ${removed} upcoming planned sessions and added ${added}, rebuilt back from race day.`;
+  }
+  revalidatePath("/races");
+  revalidatePath("/workouts");
+  revalidatePath("/dashboard");
+  redirect(`/workouts?notice=${encodeURIComponent(message)}`);
 }

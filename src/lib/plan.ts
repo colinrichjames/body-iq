@@ -38,15 +38,15 @@ const PEAKS: Record<
   triathlon_olympic: { longRun: 70, longBike: 105, brickRun: 20, swim: 50, taperWeeks: 1 },
   triathlon_70_3: { longRun: 90, longBike: 180, brickRun: 30, swim: 60, taperWeeks: 2 },
   triathlon_140_6: { longRun: 120, longBike: 300, brickRun: 45, swim: 75, taperWeeks: 3 },
-  hyrox_single: { longRun: 60, longBike: 60, brickRun: 0, swim: 0, taperWeeks: 1 },
-  hyrox_doubles: { longRun: 60, longBike: 60, brickRun: 0, swim: 0, taperWeeks: 1 },
+  hyrox_single: { longRun: 60, longBike: 60, brickRun: 0, swim: 0, taperWeeks: 2 },
+  hyrox_doubles: { longRun: 60, longBike: 60, brickRun: 0, swim: 0, taperWeeks: 2 },
 };
 
 export type WeekPlan = { weekStart: string; phase: Phase; factor: number; isRaceWeek: boolean };
 
 const TAPER_FACTORS: Record<number, number[]> = {
   1: [0.4],
-  2: [0.65, 0.4],
+  2: [0.6, 0.4],
   3: [0.75, 0.55, 0.4],
 };
 
@@ -57,13 +57,13 @@ function taperFactors(weeks: number): number[] {
 }
 
 /** Calendar weeks (Mon-Sun) from the start date through race week, with phase and volume factor. */
-export function planWeeks(raceType: RaceType, startDate: string, raceDate: string): WeekPlan[] {
+export function planWeeks(raceType: RaceType, startDate: string, raceDate: string, taperOverride?: number): WeekPlan[] {
   if (diffDays(startDate, raceDate) < 0) throw new Error("Race date must be today or later.");
 
   const first = startOfWeek(startDate);
   const raceWeek = startOfWeek(raceDate);
   const total = diffDays(first, raceWeek) / 7 + 1;
-  const taperTotal = Math.min(PEAKS[raceType].taperWeeks, total);
+  const taperTotal = Math.min(taperOverride ?? PEAKS[raceType].taperWeeks, total);
   const training = total - taperTotal;
 
   const peakWeeks = training >= 5 ? Math.max(1, Math.floor(training * 0.2)) : 0;
@@ -380,12 +380,15 @@ export function generatePlan(opts: {
   raceName: string;
   raceDate: string;
   startDate: string;
+  /** Only A races get a full taper. B and C races get a one-week reduction so they don't wreck the A-race build. */
+  priority?: "A" | "B" | "C";
 }): PlannedWorkout[] {
   const { raceType, raceName, raceDate, startDate } = opts;
+  const taperOverride = opts.priority && opts.priority !== "A" ? 1 : undefined;
   const family = familyOf(raceType);
   const out: PlannedWorkout[] = [];
 
-  for (const week of planWeeks(raceType, startDate, raceDate)) {
+  for (const week of planWeeks(raceType, startDate, raceDate, taperOverride)) {
     for (let dow = 0; dow < 7; dow++) {
       const date = addDays(week.weekStart, dow);
       if (date < startDate || date > raceDate) continue;

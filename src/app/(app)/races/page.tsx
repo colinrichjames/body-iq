@@ -49,7 +49,7 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
         </label>
         <input name="location" placeholder="Location (optional)" className={field} />
         <div className="grid grid-cols-2 gap-3">
-          <select name="priority" defaultValue="B" className={field} aria-label="Priority">
+          <select name="priority" defaultValue="A" className={field} aria-label="Priority">
             <option value="A">A race</option>
             <option value="B">B race</option>
             <option value="C">C race</option>

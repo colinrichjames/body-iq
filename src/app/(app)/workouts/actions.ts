@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { isIsoDate } from "@/lib/dates";
+import { addDays, isIsoDate } from "@/lib/dates";
+import { classify } from "@/lib/intensity";
+import { nextEasyDay } from "@/lib/stacking";
+import { getToday } from "@/lib/today";
+import type { Workout } from "@/lib/types";
 import type { Sport } from "@/lib/types";
 
 const SPORTS: Sport[] = ["strength", "run", "bike", "swim", "hyrox", "mobility", "other"];
@@ -110,4 +114,44 @@ export async function finishWorkout(input: {
 
   refresh();
   return { error: null };
+}
+
+/** Move a session to another day (free drag-and-drop, phone style). */
+export async function moveWorkout(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const date = String(formData.get("date") ?? "");
+  if (!isIsoDate(date)) redirect(`/workouts/${id}?error=${encodeURIComponent("Pick a valid date.")}`);
+  const { error } = await supabase.from("workouts").update({ workout_date: date }).eq("id", id);
+  if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(error.message)}`);
+  refresh();
+  redirect(`/workouts?d=${date}`);
+}
+
+/**
+ * Readiness is low and today's session is hard: move it to the next day without a hard session.
+ * If that day holds an easy session, bring it to today (a swap), so the load doesn't pile up.
+ */
+export async function swapHardSession(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const today = await getToday();
+  const { data: win } = await supabase
+    .from("workouts")
+    .select("*")
+    .gte("workout_date", today)
+    .lte("workout_date", addDays(today, 4))
+    .returns<Workout[]>();
+  const all = win ?? [];
+  const target = all.find((w) => w.id === id);
+  if (!target || classify(target).level !== "hard") redirect("/dashboard");
+
+  const to = nextEasyDay(all, today, 3);
+  if (!to) redirect(`/dashboard?notice=${encodeURIComponent("No easy day in the next 3 days to swap into. Move it by hand on the workout page.")}`);
+
+  const easyThere = all.filter((w) => w.workout_date === to && w.status === "planned" && classify(w).level === "easy");
+  await supabase.from("workouts").update({ workout_date: to }).eq("id", id);
+  for (const e of easyThere) await supabase.from("workouts").update({ workout_date: today }).eq("id", e.id);
+  refresh();
+  redirect(`/dashboard?notice=${encodeURIComponent(`Moved "${target.title}" to ${to}${easyThere.length ? ` and brought ${easyThere.map((e) => `"${e.title}"`).join(", ")} to today` : ""}.`)}`);
 }
