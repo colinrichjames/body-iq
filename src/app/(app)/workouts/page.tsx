@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { addDays, formatDay, isIsoDate, startOfWeek } from "@/lib/dates";
 import { getToday } from "@/lib/today";
 import { computeLoad } from "@/lib/load";
+import { HARD_DAY_RPE } from "@/lib/intensity";
 import { stackingWarnings } from "@/lib/stacking";
 import { weekSummary } from "@/lib/week";
 import { realignPlan } from "../races/actions";
@@ -135,8 +136,21 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
             </p>
           </>
         )}
+        <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-xs text-zinc-500">Actual load this week</p>
+            <p className="text-xl font-semibold tabular-nums">{load.weekActualLoad}</p>
+            <p className="text-xs text-zinc-500">completed sessions, RPE x minutes</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Planned load (estimate)</p>
+            <p className="text-xl font-semibold tabular-nums text-zinc-400">~{load.weekPlannedLoad}</p>
+            <p className="text-xs text-zinc-500">assumes RPE by session type: easy 3, moderate 5, hard 7.5</p>
+          </div>
+        </div>
         <p className="mt-2 text-xs text-zinc-500">
-          This week: load {load.weekLoad}, {load.weekHardDays} hard day{load.weekHardDays === 1 ? "" : "s"}. Load is RPE x minutes, a simple estimate (not TrainingPeaks TSS).
+          Hard days this week: {load.weekHardDays} logged (hard day = RPE {HARD_DAY_RPE} or higher)
+          {load.weekHardPlanned > 0 ? `, ${load.weekHardPlanned} hard session${load.weekHardPlanned === 1 ? "" : "s"} still planned` : ""}. Load is a simple estimate, not TrainingPeaks TSS.
         </p>
       </section>
 

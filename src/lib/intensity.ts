@@ -44,3 +44,12 @@ export function sessionLoad(w: Pick<Workout, "sport" | "title" | "rpe" | "actual
   const rpe = w.rpe ?? (classify(w).race ? 9 : DEFAULT_RPE[classify(w).level]);
   return Math.round(rpe * minutes);
 }
+
+export const HARD_DAY_RPE = 8;
+
+/** Planned load is an estimate: planned minutes x an RPE assumed from the session type (easy 3, moderate 5, hard 7.5, race 9). */
+export function plannedLoad(w: Pick<Workout, "sport" | "title" | "planned_duration_min" | "actual_duration_min">): number {
+  const minutes = w.planned_duration_min ?? w.actual_duration_min ?? 0;
+  const c = classify(w);
+  return Math.round((c.race ? 9 : DEFAULT_RPE[c.level]) * minutes);
+}
