@@ -1,5 +1,5 @@
 import { addDays, diffDays } from "./dates";
-import { sessionLoad } from "./intensity";
+import { HARD_DAY_RPE, classify, plannedLoad, sessionLoad } from "./intensity";
 import type { Workout } from "./types";
 
 export type LoadSummary = {
@@ -9,8 +9,14 @@ export type LoadSummary = {
   atl: number;
   /** Form = fitness minus fatigue. Negative means carrying fatigue. */
   tsb: number;
-  weekLoad: number;
+  /** Estimate for the whole plan this week (assumed RPE by session type). Not changed by completing sessions. */
+  weekPlannedLoad: number;
+  /** What you actually logged this week: completed sessions, RPE x actual minutes. */
+  weekActualLoad: number;
+  /** Days with a completed session logged at RPE >= HARD_DAY_RPE. */
   weekHardDays: number;
+  /** Planned sessions not yet done that are hard by type. */
+  weekHardPlanned: number;
   /** Days of completed history behind the numbers. */
   historyDays: number;
   status: "building" | "steady" | "fatigued" | "fresh" | "insufficient";
@@ -37,12 +43,11 @@ export function computeLoad(workouts: Workout[], today: string, weekStart: strin
     }
   }
 
-  const weekLoad = weekPlanned.filter((w) => w.status !== "skipped").reduce((a, w) => a + sessionLoad(w), 0);
-  const hardDates = new Set(
-    weekPlanned
-      .filter((w) => w.status !== "skipped" && w.workout_date >= weekStart && sessionLoad(w) >= 300)
-      .map((w) => w.workout_date),
-  );
+  const inWeek = weekPlanned.filter((w) => w.status !== "skipped" && w.workout_date >= weekStart);
+  const weekPlannedLoad = inWeek.reduce((a, w) => a + plannedLoad(w), 0);
+  const weekActualLoad = inWeek.filter((w) => w.status === "completed").reduce((a, w) => a + sessionLoad(w), 0);
+  const hardDates = new Set(inWeek.filter((w) => w.status === "completed" && (w.rpe ?? 0) >= HARD_DAY_RPE).map((w) => w.workout_date));
+  const weekHardPlanned = inWeek.filter((w) => w.status !== "completed" && classify(w).level === "hard").length;
 
   const tsb = ctl - atl;
   let status: LoadSummary["status"] = "steady";
@@ -51,5 +56,5 @@ export function computeLoad(workouts: Workout[], today: string, weekStart: strin
   else if (tsb > 10) status = "fresh";
   else if (atl > ctl * 1.1) status = "building";
 
-  return { ctl: Math.round(ctl), atl: Math.round(atl), tsb: Math.round(tsb), weekLoad, weekHardDays: hardDates.size, historyDays, status };
+  return { ctl: Math.round(ctl), atl: Math.round(atl), tsb: Math.round(tsb), weekPlannedLoad, weekActualLoad, weekHardDays: hardDates.size, weekHardPlanned, historyDays, status };
 }
