@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { flash } from "@/lib/flash";
 import { toTrash, withUndo } from "@/lib/trash";
 import { isIsoDate } from "@/lib/dates";
 import { parseDuration } from "@/lib/hyrox";
@@ -87,10 +88,8 @@ export async function addRace(formData: FormData) {
 
   if (formData.get("generate") === "on") await applyPlan(data);
 
-  revalidatePath("/races");
-  revalidatePath("/workouts");
-  revalidatePath("/dashboard");
-  redirect("/races");
+  revalidatePath("/", "layout");
+  redirect(flash("/races", "Race added and plan built."));
 }
 
 export async function regeneratePlan(formData: FormData) {
@@ -99,10 +98,8 @@ export async function regeneratePlan(formData: FormData) {
   const { data } = await supabase.from("races").select("*").eq("id", id).single<Race>();
   if (!data) fail("Race not found.");
   await applyPlan(data);
-  revalidatePath("/races");
-  revalidatePath("/workouts");
-  revalidatePath("/dashboard");
-  redirect("/races");
+  revalidatePath("/", "layout");
+  redirect(flash("/races", "Plan rebuilt."));
 }
 
 export async function deleteRace(formData: FormData) {
@@ -116,9 +113,7 @@ export async function deleteRace(formData: FormData) {
   await supabase.from("workouts").delete().eq("race_id", id).eq("generated", true).eq("status", "planned").gte("workout_date", today);
   const { error } = await supabase.from("races").delete().eq("id", id);
   if (error) fail(error.message);
-  revalidatePath("/races");
-  revalidatePath("/workouts");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   redirect(withUndo("/races", undo, race?.name ?? "Race"));
 }
 
@@ -139,8 +134,8 @@ export async function addBenchmark(formData: FormData) {
     notes: String(formData.get("notes") ?? "").trim() || null,
   });
   if (error) back(error.message);
-  revalidatePath(`/races/${raceId}`);
-  redirect(`/races/${raceId}`);
+  revalidatePath("/", "layout");
+  redirect(flash(`/races/${raceId}`, "Benchmark saved."));
 }
 
 export async function deleteBenchmark(formData: FormData) {
@@ -150,7 +145,7 @@ export async function deleteBenchmark(formData: FormData) {
   const { data: benchmark } = await supabase.from("hyrox_benchmarks").select("*").eq("id", id).maybeSingle<{ station: string }>();
   const undo = benchmark ? await toTrash(supabase, userId, "benchmark", `${benchmark.station} benchmark`, { benchmark, race_id: raceId }) : null;
   await supabase.from("hyrox_benchmarks").delete().eq("id", id);
-  revalidatePath(`/races/${raceId}`);
+  revalidatePath("/", "layout");
   redirect(withUndo(`/races/${raceId}`, undo, benchmark ? `${benchmark.station} benchmark` : "Benchmark"));
 }
 
@@ -185,9 +180,7 @@ export async function importPlanRows(raceId: string, rows: PlanCsvRow[]): Promis
   if (clean.length === 0) return { error: "No valid rows (need date as YYYY-MM-DD and a title).", count: 0 };
   const { error } = await supabase.from("workouts").insert(clean);
   if (error) return { error: error.message, count: 0 };
-  revalidatePath("/workouts");
-  revalidatePath("/races");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   return { error: null, count: clean.length };
 }
 
@@ -217,8 +210,6 @@ export async function realignPlan(formData: FormData) {
     const { removed, added } = await applyPlan(race);
     message = `Marked ${nSkipped} missed session${nSkipped === 1 ? "" : "s"} as skipped, removed ${removed} upcoming planned sessions and added ${added}, rebuilt back from race day.`;
   }
-  revalidatePath("/races");
-  revalidatePath("/workouts");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   redirect(`/workouts?notice=${encodeURIComponent(message)}`);
 }

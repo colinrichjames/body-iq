@@ -21,8 +21,8 @@ const SPORT_LABEL: Record<string, string> = {
   other: "Other",
 };
 
-export default async function WorkoutsPage({ searchParams }: { searchParams: Promise<{ d?: string; notice?: string }> }) {
-  const { d, notice } = await searchParams;
+export default async function WorkoutsPage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
+  const { d } = await searchParams;
   const { supabase } = await requireUser();
   const today = await getToday();
   const anchor = d && isIsoDate(d) ? d : today;
@@ -82,7 +82,6 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
         </Link>
       </div>
 
-      {notice && <p className="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</p>}
 
       {realign && (
         <section className="mt-4 rounded-2xl border border-amber-900 bg-amber-950/30 p-4 text-sm">

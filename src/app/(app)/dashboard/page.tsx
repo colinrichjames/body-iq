@@ -33,8 +33,7 @@ function delta(latest: number | null, previous: number | null, digits = 1) {
   return Number((latest - previous).toFixed(digits));
 }
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
-  const { notice } = await searchParams;
+export default async function DashboardPage() {
   const { supabase, userId, email, isGuest } = await requireUser();
   const today = await getToday();
 
@@ -118,7 +117,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </section>
       )}
 
-      {notice && <p className="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</p>}
 
       {swapNeeded && readiness && (
         <section className="mt-6 rounded-2xl border border-amber-900 bg-amber-950/30 p-5 text-sm">

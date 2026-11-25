@@ -36,9 +36,7 @@ async function syncDay(day: string) {
 }
 
 function refresh(day: string) {
-  revalidatePath("/nutrition");
-  revalidatePath("/nutrition/log");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   void day;
 }
 

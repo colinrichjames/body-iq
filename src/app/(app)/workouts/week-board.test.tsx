@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import { ToastProvider } from "@/components/toast";
 
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push: vi.fn(), replace: vi.fn() }) }));
 const reschedule = vi.fn(async () => ({ error: null }));
 vi.mock("./actions", () => ({ rescheduleWorkout: (...a: unknown[]) => reschedule(...(a as [])) }));
 let dropHandler: ((id: string, day: string) => void) | null = null;
@@ -43,5 +46,35 @@ describe("moving workouts by drag", () => {
     dropHandler!("a", "2026-11-27");
     expect(confirm).not.toHaveBeenCalled();
     expect(reschedule).toHaveBeenCalledWith("a", "2026-11-27");
+  });
+});
+
+describe("fresh data and toasts", () => {
+  it("shows server data again after a refresh instead of the stale local copy", () => {
+    const { rerender } = render(<WeekBoard days={days} today="2026-11-25" workouts={mk("planned")} />);
+    expect(screen.getByText("Run")).toBeTruthy();
+    rerender(<WeekBoard days={days} today="2026-11-25" workouts={[{ id: "b", date: "2026-11-25", title: "Bike", sport: "bike", status: "planned", minutes: 40 }]} />);
+    expect(screen.queryByText("Run")).toBeNull();
+    expect(screen.getByText("Bike")).toBeTruthy();
+  });
+  it("toasts and refreshes after a move", async () => {
+    render(
+      <ToastProvider>
+        <WeekBoard days={days} today="2026-11-25" workouts={mk("planned")} />
+      </ToastProvider>,
+    );
+    await act(async () => dropHandler!("a", "2026-11-27"));
+    expect(screen.getByText(/moved to/i)).toBeTruthy();
+    expect(refresh).toHaveBeenCalled();
+  });
+  it("toasts an error and puts the workout back when the move fails", async () => {
+    reschedule.mockResolvedValueOnce({ error: "Couldn't move it." } as never);
+    render(
+      <ToastProvider>
+        <WeekBoard days={days} today="2026-11-25" workouts={mk("planned")} />
+      </ToastProvider>,
+    );
+    await act(async () => dropHandler!("a", "2026-11-27"));
+    expect(screen.getAllByText("Couldn't move it.").length).toBeGreaterThan(0);
   });
 });

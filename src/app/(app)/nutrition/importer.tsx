@@ -1,5 +1,6 @@
 "use client";
 
+import { useToast } from "@/components/toast";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { aggregateMfp, type ParseResult } from "@/lib/mfp";
@@ -8,6 +9,7 @@ import { importNutrition } from "./actions";
 
 export function Importer() {
   const router = useRouter();
+  const { toast } = useToast();
   const [parsed, setParsed] = useState<ParseResult | null>(null);
   const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,6 +34,7 @@ export function Importer() {
     setBusy(false);
     if (res.error) return setMessage(res.error);
     setMessage(`Imported ${res.count} days.`);
+    toast(`Imported ${res.count} days.`);
     setParsed(null);
     router.refresh();
   }

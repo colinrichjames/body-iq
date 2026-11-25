@@ -63,8 +63,8 @@ const STEPS = [
   },
 ];
 
-export default async function ConnectPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
-  const { error, notice } = await searchParams;
+export default async function ConnectPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   const { supabase } = await requireUser();
   const today = await getToday();
   const { data: conn } = await supabase.from("garmin_connections").select("*").maybeSingle<{ key_last4: string; expires_on: string; verified: boolean }>();
@@ -85,7 +85,6 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
       </p>
 
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
-      {notice && <p className="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</p>}
 
       {conn ? (
         <section className={`${card} mt-5 text-sm`}>

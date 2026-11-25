@@ -1,5 +1,6 @@
 "use server";
 
+import { flash } from "@/lib/flash";
 import { toTrash, withUndo } from "@/lib/trash";
 import { isUnit, paceProblem, toKm, type DistUnit } from "@/lib/distance";
 import { revalidatePath } from "next/cache";
@@ -32,8 +33,7 @@ function distanceFields(formData: FormData) {
 
 function refresh() {
   // "layout" covers History, Calendar and every workout page under /workouts, not only the list.
-  revalidatePath("/workouts", "layout");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
 }
 
 export async function addWorkout(formData: FormData) {
@@ -62,7 +62,7 @@ export async function addWorkout(formData: FormData) {
   if (error) back(error.message);
 
   refresh();
-  redirect(`/workouts?d=${date}`);
+  redirect(flash(`/workouts?d=${date}`, "Workout added."));
 }
 
 export async function setStatus(formData: FormData) {
@@ -80,7 +80,8 @@ export async function setStatus(formData: FormData) {
     .update({ status, progress: null, completed_at: status === "completed" ? new Date().toISOString() : null })
     .eq("id", id);
   refresh();
-  redirect(`/workouts/${id}`);
+  const said = { completed: "Marked done.", skipped: "Marked skipped.", planned: "Reset to planned." }[status];
+  redirect(flash(`/workouts/${id}`, said ?? "Updated."));
 }
 
 export async function deleteWorkout(formData: FormData) {
@@ -180,7 +181,7 @@ export async function moveWorkout(formData: FormData) {
   const { error } = await supabase.from("workouts").update({ workout_date: date }).eq("id", id);
   if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(error.message)}`);
   refresh();
-  redirect(`/workouts?d=${date}`);
+  redirect(flash(`/workouts?d=${date}`, "Workout moved."));
 }
 
 /**
@@ -245,8 +246,8 @@ export async function updateWorkout(formData: FormData) {
     .eq("id", id);
   if (error) back(error.message);
   refresh();
-  revalidatePath("/workouts/calendar");
-  redirect(`/workouts/${id}`);
+  revalidatePath("/", "layout");
+  redirect(flash(`/workouts/${id}`, "Changes saved."));
 }
 
 /** Copy a session to another day (planned, not generated). */
@@ -274,8 +275,8 @@ export async function duplicateWorkout(formData: FormData) {
     .single<{ id: string }>();
   if (error || !copy) redirect(`/workouts/${id}?error=${encodeURIComponent(error?.message ?? "Copy failed.")}`);
   refresh();
-  revalidatePath("/workouts/calendar");
-  redirect(`/workouts/${copy.id}`);
+  revalidatePath("/", "layout");
+  redirect(flash(`/workouts/${copy.id}`, "Copied to the new date."));
 }
 
 /** Drag-and-drop move. Returns instead of redirecting so the board can update in place. */
@@ -285,7 +286,7 @@ export async function rescheduleWorkout(id: string, date: string): Promise<{ err
   const { error } = await supabase.from("workouts").update({ workout_date: date }).eq("id", id);
   if (error) return { error: error.message };
   refresh();
-  revalidatePath("/workouts/calendar");
+  revalidatePath("/", "layout");
   return { error: null };
 }
 
@@ -310,8 +311,8 @@ export async function attachActivity(formData: FormData) {
     .eq("id", id);
   if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(error.message)}`);
   refresh();
-  revalidatePath("/workouts/calendar");
-  redirect(`/workouts/${id}`);
+  revalidatePath("/", "layout");
+  redirect(flash(`/workouts/${id}`, "Garmin activity attached."));
 }
 
 /** Called as the player advances and when it closes: keeps logged sets and the resume point on the server. */
@@ -337,7 +338,7 @@ export async function saveProgress(input: {
       await supabase.from("workout_sets").delete().eq("workout_id", input.id);
       await supabase.from("workouts").update({ status: "planned", progress: null }).eq("id", input.id);
       refresh();
-      revalidatePath(`/workouts/${input.id}`);
+      revalidatePath("/", "layout");
     }
     return { error: null };
   }
@@ -368,7 +369,6 @@ export async function saveProgress(input: {
     if (setError) return { error: setError.message };
   }
   refresh();
-  revalidatePath("/workouts/calendar");
-  revalidatePath(`/workouts/${input.id}`);
+  revalidatePath("/", "layout");
   return { error: null };
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { flash } from "@/lib/flash";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
@@ -17,7 +18,8 @@ export async function saveTargets(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const { error } = await supabase
     .from("profiles")
-    .update({
+    .upsert({
+      id: userId,
       calorie_target: targetOrNull(formData.get("calorie_target")),
       protein_target_g: targetOrNull(formData.get("protein_target_g")),
       carbs_target_g: targetOrNull(formData.get("carbs_target_g")),
@@ -26,11 +28,10 @@ export async function saveTargets(formData: FormData) {
       rest_protein_g: targetOrNull(formData.get("rest_protein_g")),
       rest_carbs_g: targetOrNull(formData.get("rest_carbs_g")),
       rest_fat_g: targetOrNull(formData.get("rest_fat_g")),
-    })
-    .eq("id", userId);
-  if (error) console.error("saveTargets", error.message);
-  revalidatePath("/nutrition");
-  revalidatePath("/dashboard");
+    }, { onConflict: "id" });
+  if (error) redirect(`/nutrition?error=${encodeURIComponent("Couldn't save your targets. Try again.")}`);
+  revalidatePath("/", "layout");
+  redirect(flash("/nutrition", "Targets saved."));
 }
 
 export async function importNutrition(rows: NutritionRow[]): Promise<{ error: string | null; count: number }> {
@@ -55,8 +56,7 @@ export async function importNutrition(rows: NutritionRow[]): Promise<{ error: st
   const { error } = await supabase.from("nutrition_days").upsert(clean, { onConflict: "user_id,day" });
   if (error) return { error: error.message, count: 0 };
 
-  revalidatePath("/nutrition");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   return { error: null, count: clean.length };
 }
 
@@ -88,7 +88,6 @@ export async function quickAdd(formData: FormData) {
     { onConflict: "user_id,day" },
   );
   if (error) redirect(`/nutrition?error=${encodeURIComponent(error.message)}`);
-  revalidatePath("/nutrition");
-  revalidatePath("/dashboard");
-  redirect("/nutrition");
+  revalidatePath("/", "layout");
+  redirect(flash("/nutrition", "Day saved."));
 }
