@@ -33,8 +33,9 @@ export function Importer() {
     const res = await importNutrition(parsed.rows);
     setBusy(false);
     if (res.error) return setMessage(res.error);
-    setMessage(`Imported ${res.count} days.`);
-    toast(`Imported ${res.count} days.`);
+    const msg = `Imported ${res.count} day${res.count === 1 ? "" : "s"} into your food log.${res.skipped ? ` Skipped ${res.skipped} day${res.skipped === 1 ? "" : "s"} that already have food logged here.` : ""}`;
+    setMessage(msg);
+    toast(msg);
     setParsed(null);
     router.refresh();
   }

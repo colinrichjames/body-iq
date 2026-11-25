@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { addDays, formatDay, isIsoDate } from "@/lib/dates";
 import { getToday } from "@/lib/today";
-import { targetsFor } from "@/lib/targets";
+import { isTrainingDay, remainingText, targetsFor } from "@/lib/targets";
 import { card } from "@/components/ui";
 import type { Profile, Workout } from "@/lib/types";
 import { deleteFoodEntry } from "./actions";
@@ -23,7 +23,8 @@ type Entry = {
   created_at: string;
 };
 
-const MEALS = ["breakfast", "lunch", "dinner", "snack"];
+const MEALS = ["breakfast", "lunch", "dinner", "snack", "other"];
+const MEAL_LABEL: Record<string, string> = { other: "Day totals" };
 
 export default async function FoodLogPage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
   const { d } = await searchParams;
@@ -51,6 +52,7 @@ export default async function FoodLogPage({ searchParams }: { searchParams: Prom
 
   const total = (k: "calories" | "protein_g" | "carbs_g" | "fat_g") => list.reduce((a, e) => a + Number(e[k]), 0);
   const t = targetsFor(day, wk ?? [], profile ?? null);
+  const trainingDay = isTrainingDay(day, wk ?? []);
   const rows = [
     { label: "Calories", v: total("calories"), target: t.calories, unit: "" },
     { label: "Protein", v: total("protein_g"), target: t.protein, unit: " g" },
@@ -86,11 +88,11 @@ export default async function FoodLogPage({ searchParams }: { searchParams: Prom
                 {Math.round(r.v)}
                 <span className="text-sm font-normal text-zinc-500">{r.unit}</span>
               </p>
-              <p className="text-xs text-zinc-500">{r.target ? `of ${Math.round(r.target)}${r.unit} · ${Math.round(r.target - r.v)}${r.unit} left` : "no target"}</p>
+              <p className="text-xs text-zinc-500">{r.target ? `of ${Math.round(r.target)}${r.unit} · ${remainingText(r.target, r.v, r.unit)}` : "no target"}</p>
             </div>
           ))}
         </div>
-        {(wk ?? []).length > 0 && <p className="mt-3 text-xs text-zinc-500">Training day target applies.</p>}
+        <p className="mt-3 text-xs text-zinc-500">{trainingDay ? "Training day targets apply." : "Rest day targets apply."}</p>
       </section>
 
       <FoodAdder key={day + list.length} day={day} recents={recents} />
@@ -101,7 +103,7 @@ export default async function FoodLogPage({ searchParams }: { searchParams: Prom
         return (
           <section key={m} className="mt-5">
             <h2 className="flex justify-between text-xs font-medium uppercase tracking-wider text-zinc-500">
-              <span>{m}</span>
+              <span>{MEAL_LABEL[m] ?? m}</span>
               <span className="tabular-nums">{Math.round(items.reduce((a, e) => a + Number(e.calories), 0))} cal</span>
             </h2>
             <ul className="mt-1 divide-y divide-zinc-800 rounded-xl border border-zinc-800">
