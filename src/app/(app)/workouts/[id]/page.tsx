@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { getToday } from "@/lib/today";
 import { addDays, formatDay } from "@/lib/dates";
 import type { Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, card } from "@/components/ui";
 import { sessionFuel } from "@/lib/fuel";
 import { looksMerged } from "@/lib/structure";
+import { sessionUnits } from "@/lib/steps";
+import { progressLabel } from "@/lib/progress";
+import { StatusBadge } from "@/components/status-badge";
 import { field } from "@/components/ui";
 import { attachActivity, deleteWorkout, duplicateWorkout, moveWorkout, setStatus } from "../actions";
 import { garminSport } from "@/lib/sport";
@@ -14,6 +18,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const { error } = await searchParams;
   const { supabase } = await requireUser();
+  const today = await getToday();
   const { data: w } = await supabase.from("workouts").select("*").eq("id", id).maybeSingle<Workout>();
   if (!w) notFound();
 
@@ -42,6 +47,13 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       : null;
   const fuel = sessionFuel(w);
   const hasGuide = !!(s?.exercises?.length || s?.blocks?.length);
+  const units = sessionUnits(w);
+  let doneSets = 0;
+  if (w.status === "in_progress") {
+    const { count } = await supabase.from("workout_sets").select("id", { count: "exact", head: true }).eq("workout_id", w.id);
+    doneSets = count ?? 0;
+  }
+  const inProgress = w.status === "in_progress";
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -53,6 +65,10 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
         {w.planned_duration_min ? ` · ${w.planned_duration_min} min` : ""}
       </p>
       <h1 className="mt-1 text-2xl font-semibold tracking-tight">{w.title}</h1>
+      <div className="mt-2 flex items-center gap-2">
+        <StatusBadge status={w.status} overdue={w.workout_date < today} />
+        {inProgress && <span className="text-sm text-amber-300">{progressLabel(units.kind, w.progress, doneSets, units.total)}</span>}
+      </div>
       {w.description && <p className="mt-3 whitespace-pre-line text-zinc-300">{w.description}</p>}
 
       {s?.exercises && s.exercises.length > 0 && (
@@ -156,7 +172,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       <div className="mt-6 space-y-3">
         {w.status !== "completed" && (
           <Link href={`/workouts/${w.id}/start`} className={`${btnPrimary} block text-center`}>
-            {hasGuide ? "Start workout" : "Start timer"}
+            {inProgress ? "Resume" : hasGuide ? "Start workout" : "Start timer"}
           </Link>
         )}
         <div className="flex flex-wrap gap-2">
@@ -183,13 +199,16 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
               <input type="hidden" name="id" value={w.id} />
               <input type="hidden" name="status" value="planned" />
               <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
-                Reset
+                {inProgress ? "Discard progress" : "Reset"}
               </button>
             </form>
           )}
           <form action={moveWorkout} className="flex w-full items-center gap-2">
+            <label htmlFor="move-date" className="w-16 shrink-0 text-xs text-zinc-500">
+              Move to
+            </label>
             <input type="hidden" name="id" value={w.id} />
-            <input name="date" type="date" defaultValue={w.workout_date} className={`${field} !w-auto flex-1`} />
+            <input id="move-date" name="date" type="date" defaultValue={w.workout_date} className={`${field} !w-auto flex-1`} />
             <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
               Move
             </button>
@@ -198,8 +217,11 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
             Customize
           </Link>
           <form action={duplicateWorkout} className="flex w-full items-center gap-2">
+            <label htmlFor="copy-date" className="w-16 shrink-0 text-xs text-zinc-500">
+              Copy to
+            </label>
             <input type="hidden" name="id" value={w.id} />
-            <input name="date" type="date" defaultValue={w.workout_date} className={`${field} !w-auto flex-1`} />
+            <input id="copy-date" name="date" type="date" defaultValue={w.workout_date} className={`${field} !w-auto flex-1`} />
             <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
               Copy to date
             </button>

@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import { formatDay } from "@/lib/dates";
 import { SPORT_DOT } from "@/lib/sport";
 import { useDragMove } from "@/components/use-drag-move";
+import { StatusBadge } from "@/components/status-badge";
 import { card } from "@/components/ui";
 import { rescheduleWorkout } from "../actions";
 
@@ -66,7 +67,7 @@ export function MonthView({
                 {ws.slice(0, 4).map((w) => (
                   <span
                     key={w.id}
-                    className={`h-2 w-2 rounded-full ${SPORT_DOT[w.sport] ?? "bg-zinc-500"} ${w.status === "completed" ? "" : w.status === "skipped" ? "opacity-20" : "opacity-50 ring-1 ring-zinc-500"}`}
+                    className={`h-2 w-2 rounded-full ${SPORT_DOT[w.sport] ?? "bg-zinc-500"} ${w.status === "completed" ? "" : w.status === "skipped" ? "opacity-20" : w.status === "in_progress" ? "ring-2 ring-amber-400" : "opacity-50 ring-1 ring-zinc-500"}`}
                   />
                 ))}
               </span>
@@ -95,7 +96,7 @@ export function MonthView({
                         <span className={`h-2 w-2 shrink-0 rounded-full ${SPORT_DOT[w.sport] ?? "bg-zinc-500"}`} />
                         <span className="truncate">{w.title}</span>
                       </span>
-                      <span className="shrink-0 text-xs text-zinc-500">{w.status === "planned" ? (w.minutes ? `${w.minutes} min` : "planned") : w.status}</span>
+                      <StatusBadge status={w.status} overdue={sel < today} />
                     </Link>
                   </li>
                 ))}

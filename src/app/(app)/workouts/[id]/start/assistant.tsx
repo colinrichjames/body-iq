@@ -4,92 +4,41 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, field } from "@/components/ui";
-import { finishWorkout, type SetLog } from "../../actions";
+import { buildSteps } from "@/lib/steps";
+import { elapsedMs as elapsedAt, pickResume } from "@/lib/progress";
+import { finishWorkout, saveProgress, type SetLog } from "../../actions";
 
-type Step = {
-  exercise: string;
-  setNumber: number;
-  totalSets: number;
-  reps?: number;
-  seconds?: number;
-  weight?: number;
-  note?: string;
-  restAfter: number;
-};
-
-function buildSteps(w: Workout): Step[] {
-  const s = w.structure;
-  const ex = s?.exercises ?? [];
-  if (!ex.length) return [];
-  const steps: Step[] = [];
-  const defaultRest = s?.rest_sec ?? 60;
-  if (s?.rounds) {
-    for (let r = 1; r <= s.rounds; r++) {
-      ex.forEach((e, i) => {
-        const last = i === ex.length - 1;
-        steps.push({
-          exercise: e.name,
-          setNumber: r,
-          totalSets: s.rounds!,
-          reps: e.reps,
-          seconds: e.seconds,
-          weight: e.weight_lb,
-          note: e.note,
-          restAfter: last ? (r === s.rounds ? 0 : (e.rest_sec ?? defaultRest)) : 0,
-        });
-      });
-    }
-  } else {
-    ex.forEach((e, ei) => {
-      const n = e.sets ?? 1;
-      for (let k = 1; k <= n; k++) {
-        const isVeryLast = ei === ex.length - 1 && k === n;
-        steps.push({
-          exercise: e.name,
-          setNumber: k,
-          totalSets: n,
-          reps: e.reps,
-          seconds: e.seconds,
-          weight: e.weight_lb,
-          note: e.note,
-          restAfter: isVeryLast ? 0 : (e.rest_sec ?? defaultRest),
-        });
-      }
-    });
-  }
-  return steps;
-}
+type Resume = { logs: SetLog[]; stepIndex: number; blockIndex: number; elapsedMs: number };
 
 const fmt = (totalSec: number) => {
   const s = Math.max(0, Math.round(totalSec));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-export function Assistant({ workout, lastWeights, lastTime }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string> }) {
+export function Assistant({ workout, lastWeights, lastTime, serverResume }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; serverResume: Resume | null }) {
   const router = useRouter();
   const steps = useMemo(() => buildSteps(workout), [workout]);
   const blocks = workout.structure?.blocks ?? [];
   const mode: "sets" | "blocks" | "timer" = steps.length ? "sets" : blocks.length ? "blocks" : "timer";
 
   const draftKey = `bodyiq-draft-${workout.id}`;
-  const [startedAt] = useState(() => {
+  const [now, setNow] = useState(() => Date.now());
+  // Resume from the server copy or this phone's draft, whichever has more progress.
+  const [saved] = useState<Resume | null>(() => {
+    let local: Resume | null = null;
     try {
-      const d = JSON.parse(localStorage.getItem(`bodyiq-draft-${workout.id}`) ?? "null");
-      if (d && typeof d.startedAt === "number") return d.startedAt as number;
+      const d = JSON.parse(localStorage.getItem(draftKey) ?? "null");
+      if (d && Array.isArray(d.logs)) {
+        local = { logs: d.logs, stepIndex: Number(d.stepIndex) || 0, blockIndex: Number(d.blockIndex) || 0, elapsedMs: typeof d.elapsedMs === "number" ? d.elapsedMs : 0 };
+      }
     } catch {
       // storage unavailable
     }
-    return Date.now();
+    return pickResume(serverResume, local);
   });
-  const [now, setNow] = useState(() => Date.now());
-  const saved = (() => {
-    try {
-      const d = JSON.parse(localStorage.getItem(`bodyiq-draft-${workout.id}`) ?? "null");
-      return d && Array.isArray(d.logs) ? (d as { logs: SetLog[]; stepIndex: number; blockIndex: number }) : null;
-    } catch {
-      return null;
-    }
-  })();
+  // Elapsed time only counts while this screen is open: saved time plus this visit.
+  const [baseMs] = useState(saved?.elapsedMs ?? 0);
+  const [segmentStart] = useState<number | null>(() => Date.now());
   const [stepIndex, setStepIndex] = useState(() => Math.min(saved?.stepIndex ?? 0, Math.max(0, steps.length - 1)));
   const [restEnd, setRestEnd] = useState<number | null>(null);
   const [blockIndex, setBlockIndex] = useState(() => Math.min(saved?.blockIndex ?? 0, Math.max(0, blocks.length - 1)));
@@ -152,16 +101,37 @@ export function Assistant({ workout, lastWeights, lastTime }: { workout: Workout
     return side > 0.01 ? null : out;
   })();
 
-  // Never lose a session: keep progress on the phone until it is saved.
+  const elapsedNow = elapsedAt(baseMs, segmentStart, now);
+  const latest = useRef({ logs, stepIndex, blockIndex, elapsed: elapsedNow });
+  useEffect(() => {
+    latest.current = { logs, stepIndex, blockIndex, elapsed: elapsedNow };
+  });
+
+  // Never lose a session: keep progress on the phone until it is saved (heartbeat every 5 s).
+  const beat = Math.floor(now / 5000);
   useEffect(() => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ startedAt, logs, stepIndex, blockIndex }));
+      localStorage.setItem(draftKey, JSON.stringify({ logs, stepIndex, blockIndex, elapsedMs: latest.current.elapsed }));
     } catch {
       // storage unavailable
     }
-  }, [draftKey, startedAt, logs, stepIndex, blockIndex]);
+  }, [draftKey, logs, stepIndex, blockIndex, beat]);
 
-  const elapsedSec = (now - startedAt) / 1000;
+  // Also keep it on the server so the session shows as in progress everywhere.
+  const persist = useCallback(
+    (over?: Partial<{ logs: SetLog[]; stepIndex: number; blockIndex: number }>) => {
+      const l = latest.current;
+      return saveProgress({ id: workout.id, sets: over?.logs ?? l.logs, stepIndex: over?.stepIndex ?? l.stepIndex, blockIndex: over?.blockIndex ?? l.blockIndex, elapsedMs: l.elapsed }).catch(() => ({ error: "offline" }));
+    },
+    [workout.id],
+  );
+  useEffect(() => {
+    const onHide = () => document.visibilityState === "hidden" && void persist();
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [persist]);
+
+  const elapsedSec = elapsedNow / 1000;
   const restLeft = restEnd ? Math.max(0, Math.ceil((restEnd - now) / 1000)) : 0;
   const resting = restEnd !== null;
 
@@ -174,9 +144,9 @@ export function Assistant({ workout, lastWeights, lastTime }: { workout: Workout
   }, [resting, restLeft]);
 
   const goFinish = useCallback(() => {
-    setMinutes(String(Math.max(1, Math.round((Date.now() - startedAt) / 60000))));
+    setMinutes(String(Math.max(1, Math.round(latest.current.elapsed / 60000))));
     setFinished(true);
-  }, [startedAt]);
+  }, []);
 
   function completeSet() {
     if (!step) return;
@@ -189,7 +159,9 @@ export function Assistant({ workout, lastWeights, lastTime }: { workout: Workout
     setLogs(nextLogs);
     setSetRpeVal("");
     navigator.vibrate?.(30);
+    latest.current = { ...latest.current, logs: nextLogs };
     if (stepIndex >= steps.length - 1) return goFinish();
+    void persist({ logs: nextLogs, stepIndex: stepIndex + 1 });
     if (step.restAfter > 0) {
       buzzed.current = false;
       setRestEnd(Date.now() + step.restAfter * 1000);
@@ -203,6 +175,7 @@ export function Assistant({ workout, lastWeights, lastTime }: { workout: Workout
   function nextBlock() {
     navigator.vibrate?.(30);
     if (blockIndex >= blocks.length - 1) return goFinish();
+    void persist({ blockIndex: blockIndex + 1 });
     setBlockIndex((i) => i + 1);
     setBlockStart(Date.now());
   }
@@ -235,9 +208,11 @@ export function Assistant({ workout, lastWeights, lastTime }: { workout: Workout
     router.refresh();
   }
 
-  function quit() {
-    // Progress stays on this phone, so coming back resumes where you left off.
+  async function quit() {
+    // Saved on this phone and on the server, so coming back resumes where you left off.
+    await persist();
     router.push(`/workouts/${workout.id}`);
+    router.refresh();
   }
 
   // ----------------------------------------------------------------- finish

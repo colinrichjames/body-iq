@@ -39,7 +39,10 @@ export type Race = {
 };
 
 export type Sport = "strength" | "run" | "bike" | "swim" | "hyrox" | "mobility" | "other";
-export type WorkoutStatus = "planned" | "completed" | "skipped";
+export type WorkoutStatus = "planned" | "in_progress" | "completed" | "skipped";
+
+/** Where a half-finished session stands. elapsedMs only counts time the player was open. */
+export type WorkoutProgress = { stepIndex: number; blockIndex: number; elapsedMs: number; updatedAt: string };
 
 export type Exercise = {
   name: string;
@@ -77,6 +80,7 @@ export type Workout = {
   planned_duration_min: number | null;
   structure: WorkoutStructure | null;
   status: WorkoutStatus;
+  progress: WorkoutProgress | null;
   race_id: string | null;
   generated: boolean;
   actual_duration_min: number | null;
