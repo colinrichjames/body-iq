@@ -22,8 +22,9 @@ const TABLES: Record<string, string[]> = {
   hyrox_benchmarks: ["effort_date", "created_at"],
   activities: ["started_at"],
   daily_health: ["day"],
+  recovery_checkins: ["day"],
 };
-const CSV_TABLES: Record<string, string> = { workouts: "workouts", sets: "workout_sets", nutrition: "nutrition_days", food: "food_entries", hydration: "hydration_days", activities: "activities", health: "daily_health", scans: "body_scans", races: "races", benchmarks: "hyrox_benchmarks" };
+const CSV_TABLES: Record<string, string> = { workouts: "workouts", sets: "workout_sets", nutrition: "nutrition_days", food: "food_entries", hydration: "hydration_days", activities: "activities", health: "daily_health", checkins: "recovery_checkins", scans: "body_scans", races: "races", benchmarks: "hyrox_benchmarks" };
 
 const FOOD_COLUMNS = ["day", "meal", "name", "brand", "amount_label", "calories", "protein_g", "carbs_g", "fat_g", "sodium_mg", "sugar_g", "fiber_g", "barcode", "source", "created_at"];
 

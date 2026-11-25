@@ -10,7 +10,8 @@ import { phaseInfo, planStartFrom } from "@/lib/race-phase";
 import { raceDayCard } from "@/lib/race-day";
 import { getTimeZone, getToday } from "@/lib/today";
 import { dueReminders, hourIn } from "@/lib/reminders";
-import { computeReadiness } from "@/lib/readiness";
+import { computeReadiness, mergeCheckins } from "@/lib/readiness";
+import { CheckinCard } from "@/components/checkin-card";
 import { fuelForDay } from "@/lib/fuel";
 import { classify } from "@/lib/intensity";
 import { swapHardSession } from "../workouts/actions";
@@ -18,7 +19,7 @@ import { dismissChecklist, saveGuestAccount } from "./guest-actions";
 import { buildChecklist } from "@/lib/checklist";
 import { FirstRunChecklist } from "@/components/first-run-checklist";
 import { targetsFor } from "@/lib/targets";
-import type { BodyScan, DailyHealth, NutritionDay, Profile, Race, SyncRun, Workout } from "@/lib/types";
+import type { BodyScan, DailyHealth, NutritionDay, Profile, RecoveryCheckin, Race, SyncRun, Workout } from "@/lib/types";
 
 async function signOut() {
   "use server";
@@ -42,7 +43,7 @@ export default async function DashboardPage() {
   const { supabase, userId, email, isGuest } = await requireUser();
   const today = await getToday();
 
-  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, syncRes, raceCount, workoutCount, scanCount, foodCount, garminConn] = await Promise.all([
+  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, syncRes, raceCount, workoutCount, scanCount, foodCount, garminConn, checkinRes] = await Promise.all([
     supabase.from("body_scans").select("*").order("scanned_at", { ascending: false }).limit(2).returns<BodyScan[]>(),
     supabase.from("workouts").select("*").gte("workout_date", addDays(today, -27)).lte("workout_date", addDays(today, 1)).returns<Workout[]>(),
     supabase.from("nutrition_days").select("*").gte("day", addDays(today, -13)).order("day", { ascending: false }).returns<NutritionDay[]>(),
@@ -55,6 +56,7 @@ export default async function DashboardPage() {
     supabase.from("body_scans").select("id", { count: "exact", head: true }),
     supabase.from("food_entries").select("id", { count: "exact", head: true }),
     supabase.from("garmin_connections").select("user_id", { count: "exact", head: true }),
+      supabase.from("recovery_checkins").select("day,sleep_hours,soreness,energy").order("day", { ascending: false }).limit(14).returns<RecoveryCheckin[]>(),
   ]);
   const checklist = buildChecklist({
     races: raceCount.count ?? 0,
@@ -75,7 +77,9 @@ export default async function DashboardPage() {
   const planStart = planStartFrom(planRows ?? []);
   const nextPhase = nextRace ? phaseInfo(nextRace.race_type, nextRace.race_date, today, planStart) : null;
   const todays = workouts.filter((w) => w.workout_date === today);
-  const readiness = computeReadiness(healthRes.data ?? []);
+  const health = mergeCheckins(healthRes.data ?? [], checkinRes.data ?? []);
+  const todaysCheckin = (checkinRes.data ?? []).find((c) => c.day === today) ?? null;
+  const readiness = computeReadiness(health);
   const lastSync = syncRes.data?.[0] ?? null;
   const todayFuel = (nutritionRes.data ?? []).find((d) => d.day === today) ?? null;
   // The Today card already lists planned sessions, so only the nudges it doesn't cover are shown here.
@@ -96,7 +100,7 @@ export default async function DashboardPage() {
     scans,
     workouts,
     nutrition: nutritionRes.data ?? [],
-    health: healthRes.data ?? [],
+    health,
     profile: profileRes.data ?? null,
     nextRace,
     planStart,
@@ -249,8 +253,11 @@ export default async function DashboardPage() {
             </p>
           </>
         ) : (
-          <p className="mt-2 text-sm text-zinc-500">No Garmin health data yet. Sleep, HRV and Body Battery will drive a green/amber/red call here once sync is connected.</p>
+          <p className="mt-2 text-sm text-zinc-500">No recovery data yet. Add a quick check-in below, or connect a Garmin for sleep, HRV and Body Battery.</p>
         )}
+        <div className="mt-4">
+          <CheckinCard today={today} existing={todaysCheckin} from="/dashboard" />
+        </div>
         <p className="mt-3 border-t border-zinc-800 pt-3 text-xs text-zinc-500">
           Garmin sync:{" "}
           {lastSync
