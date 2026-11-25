@@ -6,6 +6,7 @@ import type { Profile } from "@/lib/types";
 import { btnPrimary, field } from "@/components/ui";
 import { addWorkout } from "../actions";
 import { ExerciseEditor } from "../exercise-editor";
+import { DraftForm } from "@/components/draft-form";
 import { Field } from "@/components/field";
 
 export default async function NewWorkoutPage({ searchParams }: { searchParams: Promise<{ error?: string; date?: string }> }) {
@@ -21,7 +22,7 @@ export default async function NewWorkoutPage({ searchParams }: { searchParams: P
       </Link>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">Add workout</h1>
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
-      <form action={addWorkout} className="mt-6 space-y-3">
+      <DraftForm action={addWorkout} draftKey="workout-new" className="mt-6 space-y-3">
         <Field label="Title"><input name="title" placeholder="e.g. Tempo run" required className={field} /></Field>
         <div className="grid grid-cols-2 gap-3">
           <select name="sport" defaultValue="run" className={field}>
@@ -44,13 +45,13 @@ export default async function NewWorkoutPage({ searchParams }: { searchParams: P
         </div>
         <input name="workout_date" type="date" defaultValue={date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : today} required className={field} />
         <Field label="Details"><textarea name="description" rows={4} placeholder="e.g. 10 min warm-up, 3 x 8 min at threshold" className={field} /></Field>
-        <ExerciseEditor initial={[]} />
+        <ExerciseEditor initial={[]} draftKey="workout-new" />
         <div className="grid grid-cols-2 gap-3">
           <Field label="Circuit rounds (optional)"><input name="rounds" type="number" inputMode="numeric" min="1" className={field} /></Field>
           <Field label="Rest seconds"><input name="rest_sec" type="number" inputMode="numeric" min="0" className={field} /></Field>
         </div>
         <SubmitButton className={`${btnPrimary} w-full`}>Save workout</SubmitButton>
-      </form>
+      </DraftForm>
     </main>
   );
 }

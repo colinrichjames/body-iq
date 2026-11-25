@@ -8,6 +8,7 @@ import { getToday } from "@/lib/today";
 import type { Race } from "@/lib/types";
 import { btnGhost, btnPrimary, card, field } from "@/components/ui";
 import { addRace, deleteRace, regeneratePlan } from "./actions";
+import { DraftForm } from "@/components/draft-form";
 import { Field } from "@/components/field";
 
 export default async function RacesPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -35,7 +36,7 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
 
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
 
-      <form action={addRace} className={`${card} mt-6 space-y-3`}>
+      <DraftForm action={addRace} draftKey="race-new" className={`${card} mt-6 space-y-3`}>
         <h2 className="font-medium">Add a race</h2>
         <Field label="Race name"><input name="name" required className={field} /></Field>
         <select name="race_type" defaultValue="marathon" className={field}>
@@ -66,7 +67,7 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
         <button type="submit" className={`${btnPrimary} w-full`}>
           Add race
         </button>
-      </form>
+      </DraftForm>
 
       <h2 className="mt-8 text-sm text-zinc-400">Upcoming</h2>
       {upcoming.length === 0 && <p className="mt-2 text-sm text-zinc-500">No upcoming races yet.</p>}

@@ -1,6 +1,7 @@
 "use client";
 
 import { formatDay } from "@/lib/dates";
+import { DraftNotice, useFormDraft } from "@/components/use-form-draft";
 
 /** A form that asks before submitting when `needsConfirm()` says so. */
 export function ConfirmForm({
@@ -11,6 +12,7 @@ export function ConfirmForm({
   dateField,
   existingDays,
   windowStart,
+  draftKey,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   className?: string;
@@ -20,9 +22,14 @@ export function ConfirmForm({
   dateField: string;
   existingDays: string[];
   windowStart: string;
+  draftKey?: string;
 }) {
+  const { ref, restored, onInput, onSubmit, discard } = useFormDraft(draftKey);
   return (
     <form
+      ref={ref}
+      onInput={onInput}
+      onChange={onInput}
       action={action}
       className={className}
       onSubmit={(e) => {
@@ -30,8 +37,10 @@ export function ConfirmForm({
         // Ask when that day already has data, or is older than what we can see here.
         const risky = existingDays.includes(day) || (day !== "" && day < windowStart);
         if (risky && !window.confirm(message.replace("{day}", formatDay(day)))) e.preventDefault();
+        else onSubmit();
       }}
     >
+      {restored && <DraftNotice onDiscard={discard} />}
       {children}
     </form>
   );
