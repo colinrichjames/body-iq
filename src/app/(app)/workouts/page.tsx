@@ -57,6 +57,9 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
     <main className="mx-auto w-full max-w-md px-5 py-8">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Training</h1>
+        <Link href="/workouts/calendar" className="ml-auto mr-3 text-sm text-zinc-400">
+          Month view
+        </Link>
         <Link href="/workouts/new" className={`${btnPrimary} px-3 py-2 text-sm`}>
           Add workout
         </Link>

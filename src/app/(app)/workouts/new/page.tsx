@@ -3,8 +3,8 @@ import { getToday } from "@/lib/today";
 import { btnPrimary, field } from "@/components/ui";
 import { addWorkout } from "../actions";
 
-export default async function NewWorkoutPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function NewWorkoutPage({ searchParams }: { searchParams: Promise<{ error?: string; date?: string }> }) {
+  const { error, date } = await searchParams;
   const today = await getToday();
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -27,8 +27,18 @@ export default async function NewWorkoutPage({ searchParams }: { searchParams: P
           </select>
           <input name="planned_duration_min" type="number" inputMode="numeric" min="1" placeholder="Minutes" className={field} />
         </div>
-        <input name="workout_date" type="date" defaultValue={today} required className={field} />
+        <input name="workout_date" type="date" defaultValue={date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : today} required className={field} />
         <textarea name="description" rows={4} placeholder="Details, e.g. 10 min warm-up, 3 x 8 min at threshold" className={field} />
+        <textarea
+          name="exercises"
+          rows={5}
+          placeholder={"Exercises (optional), one per line:\nBack squat 4x6 @ 135\nPull-ups 3x8\nPlank 3x45s"}
+          className={field}
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <input name="rounds" type="number" inputMode="numeric" min="1" placeholder="Circuit rounds (optional)" className={field} />
+          <input name="rest_sec" type="number" inputMode="numeric" min="0" placeholder="Rest seconds" className={field} />
+        </div>
         <button type="submit" className={`${btnPrimary} w-full`}>
           Save workout
         </button>
