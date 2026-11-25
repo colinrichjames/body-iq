@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { formatExercises } from "@/lib/structure";
 import { btnPrimary, field } from "@/components/ui";
 import type { Workout } from "@/lib/types";
 import { updateWorkout } from "../../actions";
+import { ExerciseEditor } from "../../exercise-editor";
 
 export default async function EditWorkoutPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
@@ -35,8 +35,7 @@ export default async function EditWorkoutPage({ params, searchParams }: { params
         </div>
         <input name="workout_date" type="date" defaultValue={w.workout_date} required className={field} />
         <textarea name="description" rows={4} defaultValue={w.description ?? ""} placeholder="Notes and details" className={field} />
-        <label className="block text-xs text-zinc-500">Exercises, one per line (e.g. Back squat 4x6 @ 135, Plank 3x45s)</label>
-        <textarea name="exercises" rows={7} defaultValue={formatExercises(s?.exercises)} className={`${field} font-mono text-sm`} />
+        <ExerciseEditor initial={s?.exercises ?? []} />
         <div className="grid grid-cols-2 gap-3">
           <input name="rounds" type="number" inputMode="numeric" min="1" defaultValue={s?.rounds ?? ""} placeholder="Circuit rounds" className={field} />
           <input name="rest_sec" type="number" inputMode="numeric" min="0" defaultValue={s?.rest_sec ?? ""} placeholder="Rest seconds" className={field} />

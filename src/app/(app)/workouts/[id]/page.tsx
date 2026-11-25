@@ -5,6 +5,7 @@ import { addDays, formatDay } from "@/lib/dates";
 import type { Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, card } from "@/components/ui";
 import { sessionFuel } from "@/lib/fuel";
+import { looksMerged } from "@/lib/structure";
 import { field } from "@/components/ui";
 import { attachActivity, deleteWorkout, duplicateWorkout, moveWorkout, setStatus } from "../actions";
 import { garminSport } from "@/lib/sport";
@@ -61,12 +62,17 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
           </h2>
           <ul className="mt-2 divide-y divide-zinc-800">
             {s.exercises.map((e, i) => (
-              <li key={i} className="flex justify-between gap-3 py-2 text-sm">
-                <span>{e.name}</span>
-                <span className="text-zinc-400">
-                  {e.seconds ? `${e.seconds}s` : `${e.sets ? `${e.sets} x ` : ""}${e.reps ?? ""}`}
-                  {e.weight_lb ? ` @ ${e.weight_lb} lb` : ""}
-                </span>
+              <li key={i} className="py-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <span>{e.name}</span>
+                  <span className="shrink-0 text-zinc-400">
+                    {e.seconds ? `${e.sets ? `${e.sets} x ` : ""}${e.seconds}s` : `${e.sets ? `${e.sets} x ` : ""}${e.reps ?? ""}`}
+                    {e.weight_lb ? ` @ ${e.weight_lb} lb` : ""}
+                  </span>
+                </div>
+                {looksMerged(e.name) && (
+                  <p className="mt-1 text-xs text-amber-400">This looks like several exercises in one line. Tap Customize to split it before you start.</p>
+                )}
               </li>
             ))}
           </ul>
