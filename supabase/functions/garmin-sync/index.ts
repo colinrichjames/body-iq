@@ -169,11 +169,12 @@ Deno.serve(async (req) => {
       const d = dayOf(s);
       if (!d) continue;
       const r = dayRow(d);
-      r.steps = int(pick(s, "totalSteps", "steps"));
-      r.resting_hr = int(pick(s, "restingHeartRate", "restingHeartRateValue"));
-      r.stress_avg = int(pick(s, "averageStressLevel", "avgStressLevel"));
-      r.body_battery_max = int(pick(s, "bodyBatteryHighestValue", "bodyBatteryMostRecentValue"));
-      r.body_battery_min = int(pick(s, "bodyBatteryLowestValue"));
+      // The personal API nests these: movement.steps.value, heartRate.restingValue, stress.avgLevel, bodyBattery.maxValue.
+      r.steps = int(s?.movement?.steps?.value ?? pick(s, "totalSteps", "steps"));
+      r.resting_hr = int(s?.heartRate?.restingValue ?? pick(s, "restingHeartRate", "restingHeartRateValue"));
+      r.stress_avg = int(s?.stress?.avgLevel ?? pick(s, "averageStressLevel", "avgStressLevel"));
+      r.body_battery_max = int(s?.bodyBattery?.maxValue ?? pick(s, "bodyBatteryHighestValue", "bodyBatteryMostRecentValue"));
+      r.body_battery_min = int(s?.bodyBattery?.minValue ?? pick(s, "bodyBatteryLowestValue"));
       r.raw.summary = s;
     }
     for (const s of arr(sleep)) {
