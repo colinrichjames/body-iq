@@ -35,3 +35,15 @@ export function recap(logs: SetLog[]): ExerciseRecap[] {
 }
 
 export const countSets = (logs: SetLog[]) => ({ done: logs.filter((l) => !l.skipped).length, skipped: logs.filter((l) => l.skipped).length });
+
+/** Total weight x reps per exercise (lb). Skipped sets and bodyweight sets add nothing. */
+export function volumeByExercise(logs: SetLog[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const l of logs) {
+    if (l.skipped || l.weight_lb === null || l.reps === null) continue;
+    out[l.exercise] = (out[l.exercise] ?? 0) + l.weight_lb * l.reps;
+  }
+  return out;
+}
+
+export const totalVolume = (logs: SetLog[]) => Object.values(volumeByExercise(logs)).reduce((a, b) => a + b, 0);

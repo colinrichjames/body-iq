@@ -1,3 +1,4 @@
+import { fromKm } from "@/lib/distance";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
@@ -32,6 +33,13 @@ export default async function EditWorkoutPage({ params, searchParams }: { params
             ))}
           </select>
           <input name="planned_duration_min" type="number" inputMode="numeric" min="1" defaultValue={w.planned_duration_min ?? ""} placeholder="Minutes" className={field} />
+        </div>
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <input name="planned_distance" type="number" inputMode="decimal" step="any" min="0" defaultValue={w.planned_distance_km ? fromKm(w.planned_distance_km, w.distance_unit) : ""} placeholder="Distance (optional)" className={field} aria-label="Planned distance" />
+          <select name="distance_unit" defaultValue={w.distance_unit} className={field} aria-label="Distance unit">
+            <option value="mi">mi</option>
+            <option value="km">km</option>
+          </select>
         </div>
         <input name="workout_date" type="date" defaultValue={w.workout_date} required className={field} />
         <textarea name="description" rows={4} defaultValue={w.description ?? ""} placeholder="Notes and details" className={field} />

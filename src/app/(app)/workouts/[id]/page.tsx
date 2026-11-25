@@ -11,6 +11,7 @@ import { sessionUnits } from "@/lib/steps";
 import { progressLabel } from "@/lib/progress";
 import { StatusBadge } from "@/components/status-badge";
 import { recap } from "@/lib/player";
+import { fmtDist, fmtPace } from "@/lib/distance";
 import { buildSteps } from "@/lib/steps";
 import { restSummary } from "@/lib/context";
 import type { WorkoutSet } from "@/lib/types";
@@ -41,14 +42,8 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
     const usedIds = new Set((used ?? []).map((u) => u.activity_id));
     suggestions = (acts ?? []).filter((a) => !usedIds.has(a.id) && garminSport(a.sport) === w.sport);
   }
-  const miles = w.actual_distance_km ? w.actual_distance_km / 1.609344 : null;
-  const pace =
-    miles && w.actual_duration_min && w.sport !== "swim"
-      ? (() => {
-          const p = w.actual_duration_min / miles;
-          return `${Math.floor(p)}:${String(Math.round((p % 1) * 60)).padStart(2, "0")} /mi`;
-        })()
-      : null;
+  const unit = w.distance_unit ?? "mi";
+  const pace = w.actual_distance_km && w.actual_duration_min && w.sport !== "swim" ? fmtPace(w.actual_duration_min, w.actual_distance_km, unit) : null;
   const fuel = sessionFuel(w);
   const hasGuide = !!(s?.exercises?.length || s?.blocks?.length);
   const units = sessionUnits(w);
@@ -75,6 +70,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       <p className="mt-3 text-xs uppercase tracking-wider text-zinc-500">
         {formatDay(w.workout_date, { weekday: true, year: true })} &middot; {w.sport}
         {w.planned_duration_min ? ` · ${w.planned_duration_min} min` : ""}
+        {w.planned_distance_km ? ` · ${fmtDist(w.planned_distance_km, unit)}` : ""}
       </p>
       <h1 className="mt-1 text-2xl font-semibold tracking-tight">{w.title}</h1>
       <div className="mt-2 flex items-center gap-2">
@@ -178,9 +174,9 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
             {w.actual_duration_min ? `${w.actual_duration_min} min` : ""}
             {w.rpe ? ` · RPE ${w.rpe}/10` : ""}
           </p>
-          {(miles || w.avg_hr || w.avg_power) && (
+          {(w.actual_distance_km || w.avg_hr || w.avg_power) && (
             <p className="mt-1 text-zinc-400">
-              {miles ? `${miles.toFixed(2)} mi` : ""}
+              {w.actual_distance_km ? fmtDist(w.actual_distance_km, unit) : ""}
               {pace ? ` · ${pace}` : ""}
               {w.avg_hr ? ` · avg ${w.avg_hr} bpm` : ""}
               {w.avg_power ? ` · ${w.avg_power} W` : ""}

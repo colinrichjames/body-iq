@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { formatDay } from "@/lib/dates";
 import { exerciseIndex, sessionsFor, type SetRow } from "@/lib/history";
+import { fmtDist, fmtPace } from "@/lib/distance";
 import { SPORT_NAME } from "@/lib/sport";
 import { card, field } from "@/components/ui";
 import { StatusBadge } from "@/components/status-badge";
@@ -9,11 +10,6 @@ import { sessionUnits } from "@/lib/steps";
 import { progressLabel } from "@/lib/progress";
 import type { Workout } from "@/lib/types";
 
-const mi = (km: number) => km / 1.609344;
-const pace = (min: number, miles: number) => {
-  const p = min / miles;
-  return `${Math.floor(p)}:${String(Math.round((p % 1) * 60)).padStart(2, "0")} /mi`;
-};
 
 export default async function HistoryPage({ searchParams }: { searchParams: Promise<{ q?: string; x?: string }> }) {
   const { q, x } = await searchParams;
@@ -153,7 +149,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
               {(cardio ?? [])
                 .filter((w) => !term || w.title.toLowerCase().includes(term) || w.sport.includes(term))
                 .map((w) => {
-                  const m = w.actual_distance_km ? mi(w.actual_distance_km) : null;
+                  const m = w.actual_distance_km ?? null;
                   return (
                     <li key={w.id}>
                       <Link href={`/workouts/${w.id}`} className="flex items-center justify-between gap-3 px-3 py-3">
@@ -164,8 +160,8 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
                           </span>
                         </span>
                         <span className="shrink-0 text-right text-xs tabular-nums text-zinc-400">
-                          {m ? `${m.toFixed(1)} mi` : ""}
-                          {m && w.actual_duration_min && w.sport !== "swim" ? ` · ${pace(w.actual_duration_min, m)}` : w.actual_duration_min ? `${w.actual_duration_min} min` : ""}
+                          {m ? fmtDist(m, w.distance_unit ?? "mi") : ""}
+                          {m && w.actual_duration_min && w.sport !== "swim" ? ` · ${fmtPace(w.actual_duration_min, m, w.distance_unit ?? "mi")}` : w.actual_duration_min ? `${w.actual_duration_min} min` : ""}
                         </span>
                       </Link>
                     </li>
