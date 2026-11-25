@@ -7,7 +7,7 @@ import { addDays, isIsoDate } from "@/lib/dates";
 import { classify } from "@/lib/intensity";
 import { nextEasyDay } from "@/lib/stacking";
 import { getToday } from "@/lib/today";
-import { buildStructure, parseExercises } from "@/lib/structure";
+import { buildStructure, exercisesFromForm } from "@/lib/structure";
 import type { Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
 
@@ -43,7 +43,7 @@ export async function addWorkout(formData: FormData) {
     title,
     description: String(formData.get("description") ?? "").trim() || null,
     planned_duration_min: numOrNull(formData.get("planned_duration_min")),
-    structure: buildStructure(null, parseExercises(String(formData.get("exercises") ?? "")), numOrNull(formData.get("rounds")), numOrNull(formData.get("rest_sec"))),
+    structure: buildStructure(null, exercisesFromForm(formData), numOrNull(formData.get("rounds")), numOrNull(formData.get("rest_sec"))),
     generated: false,
     status: "planned",
   });
@@ -180,7 +180,7 @@ export async function updateWorkout(formData: FormData) {
   const { data: prev } = await supabase.from("workouts").select("structure").eq("id", id).maybeSingle<{ structure: WorkoutStructure | null }>();
   const structure = buildStructure(
     prev?.structure ?? null,
-    parseExercises(String(formData.get("exercises") ?? "")),
+    exercisesFromForm(formData),
     numOrNull(formData.get("rounds")),
     numOrNull(formData.get("rest_sec")),
   );
