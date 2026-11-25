@@ -12,6 +12,8 @@ import { sessionUnits } from "@/lib/steps";
 import { progressLabel } from "@/lib/progress";
 import { StatusBadge } from "@/components/status-badge";
 import { recap } from "@/lib/player";
+import { sessionInsights, type SessionInsights } from "@/lib/session-insights";
+import { prText } from "@/lib/lifting";
 import { fmtDist, fmtPace } from "@/lib/distance";
 import { buildSteps } from "@/lib/steps";
 import { restSummary } from "@/lib/context";
@@ -58,6 +60,14 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
   if (w.status === "completed" || w.status === "in_progress") {
     const { data: ls } = await supabase.from("workout_sets").select("*").eq("workout_id", w.id).order("created_at").returns<WorkoutSet[]>();
     loggedSets = ls ?? [];
+  }
+  let insights: SessionInsights = { prs: [], next: [] };
+  if (w.status === "completed" && loggedSets.length) {
+    insights = await sessionInsights(
+      supabase,
+      w,
+      loggedSets.map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped })),
+    ).catch(() => insights);
   }
   const recapRows = recap(loggedSets.map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped })));
   const exSteps = buildSteps(w);
@@ -140,6 +150,37 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {insights.prs.length > 0 && (
+        <section className="mt-5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+          <h2 className="text-sm font-medium text-emerald-300">New personal record{insights.prs.length === 1 ? "" : "s"}</h2>
+          <ul className="mt-2 space-y-1 text-sm text-zinc-200">
+            {insights.prs.map((p) => (
+              <li key={p.exercise}>{prText(p)}</li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {insights.next.length > 0 && (
+        <section className={`${card} mt-5`}>
+          <h2 className="text-sm text-zinc-400">Next time</h2>
+          <ul className="mt-2 divide-y divide-zinc-800 text-sm">
+            {insights.next.map((n) => (
+              <li key={n.exercise} className="py-2">
+                <div className="flex justify-between gap-3">
+                  <span>{n.exercise}</span>
+                  <span className={`shrink-0 tabular-nums ${n.action === "up" ? "text-emerald-400" : n.action === "down" ? "text-amber-400" : "text-zinc-300"}`}>
+                    {n.action === "same" ? `Stay at ${n.to} lb` : `${n.from} to ${n.to} lb`}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-zinc-500">{n.reason}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-zinc-600">Based on this session against its target reps. Dumbbell weights are per hand.</p>
         </section>
       )}
 
