@@ -1,9 +1,16 @@
 "use server";
 
 import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { friendlyAuthError } from "@/lib/auth-errors";
+
+export async function dismissChecklist() {
+  const { supabase, userId } = await requireUser();
+  await supabase.from("profiles").upsert({ id: userId, onboarding_dismissed_at: new Date().toISOString() }, { onConflict: "id" });
+  revalidatePath("/", "layout");
+}
 
 /** Turns the guest into a real account: same user id, so all data stays. Sends a confirmation link. */
 export async function saveGuestAccount(formData: FormData) {

@@ -1,0 +1,1 @@
+alter table public.profiles add column if not exists onboarding_dismissed_at timestamptz;
