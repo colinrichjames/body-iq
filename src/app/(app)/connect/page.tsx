@@ -84,6 +84,20 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
         workouts to your watch.
       </p>
 
+      <details className={`${card} mt-4 text-sm`}>
+        <summary className="cursor-pointer font-medium">What happens to your Garmin key</summary>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-zinc-400">
+          <li>It only lets Body IQ read your data. It can&apos;t change your Garmin account or send workouts to your watch.</li>
+          <li>It is saved in a table your browser can&apos;t read back, and never shown again after you save it.</li>
+          <li>The server uses it only when you tap Sync, to ask Garmin for your data. It isn&apos;t logged.</li>
+          <li>It is stored as plain text in that protected table, not separately encrypted. Supabase encrypts the storage underneath.</li>
+          <li>Disconnect deletes it from Body IQ immediately. Delete it in Garmin Connect too if you won&apos;t reuse it.</li>
+        </ul>
+        <Link href="/privacy" className="mt-2 inline-block text-emerald-400 underline">
+          Full privacy page
+        </Link>
+      </details>
+
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
 
       {conn ? (
@@ -91,6 +105,9 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
           <p className="font-medium text-emerald-400">Garmin key saved</p>
           <p className="mt-1 text-zinc-400">
             Ends in {conn.key_last4}. {conn.verified ? "Verified with Garmin." : "Not yet verified with Garmin."}
+          </p>
+          <p className="mt-1 text-zinc-400">
+            {last ? `Last used ${formatDay(last.started_at.slice(0, 10), { weekday: false })} when you synced (${last.status}).` : "Not used yet. It is only used when you tap Sync."}
           </p>
           <p className={`mt-1 ${daysLeft !== null && daysLeft <= 14 ? "text-amber-400" : "text-zinc-400"}`}>
             {daysLeft !== null && daysLeft < 0
