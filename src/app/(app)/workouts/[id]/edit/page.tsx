@@ -1,3 +1,4 @@
+import { SubmitButton } from "@/components/submit-button";
 import { fromKm } from "@/lib/distance";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -50,9 +51,7 @@ export default async function EditWorkoutPage({ params, searchParams }: { params
         </div>
         {s?.blocks && s.blocks.length > 0 && <p className="text-xs text-zinc-500">This session&apos;s timed blocks are kept as they are.</p>}
         <p className="text-xs text-zinc-500">Saving marks this session as yours, so plan re-alignment won&apos;t overwrite it.</p>
-        <button type="submit" className={`${btnPrimary} w-full`}>
-          Save changes
-        </button>
+        <SubmitButton className={`${btnPrimary} w-full`}>Save changes</SubmitButton>
       </form>
     </main>
   );

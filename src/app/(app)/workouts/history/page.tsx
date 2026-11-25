@@ -15,7 +15,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const { q, x } = await searchParams;
   const { supabase } = await requireUser();
 
-  const [{ data: setRows }, { data: cardio }, { data: partial }] = await Promise.all([
+  const [{ data: setRows }, { data: cardio, error: cardioError }, { data: partial }] = await Promise.all([
     supabase
       .from("workout_sets")
       .select("exercise,set_number,reps,weight_lb,rpe,skipped,workout_id,workouts(workout_date,title)")
@@ -142,7 +142,9 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
           )}
 
           <h2 className="mt-6 text-sm text-zinc-400">Endurance</h2>
-          {(cardio ?? []).length === 0 ? (
+          {cardioError ? (
+            <p className="mt-2 text-sm text-red-300">Couldn&apos;t load endurance sessions: {cardioError.message}</p>
+          ) : (cardio ?? []).length === 0 ? (
             <p className="mt-2 text-sm text-zinc-500">Finish a run, ride or swim and it shows up here.</p>
           ) : (
             <ul className="mt-2 divide-y divide-zinc-800 rounded-xl border border-zinc-800">

@@ -7,6 +7,8 @@ import type { NutritionDay, Profile, Workout } from "@/lib/types";
 import { btnGhost, card, field } from "@/components/ui";
 import { quickAdd, saveTargets } from "./actions";
 import { Importer } from "./importer";
+import { ConfirmForm } from "@/components/confirm-form";
+import { SubmitButton } from "@/components/submit-button";
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
@@ -43,7 +45,7 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
 
       <section className={`${card} mt-5`}>
-        <h2 className="text-sm text-zinc-400">7-day average vs target</h2>
+        <h2 className="text-sm text-zinc-400">Average vs target</h2>
         {week.length === 0 ? (
           <p className="mt-2 text-sm text-zinc-500">No food logged in the last 7 days. Import a MyFitnessPal export below.</p>
         ) : (
@@ -60,7 +62,7 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-xs text-zinc-500">Based on {week.length} logged day(s).</p>
+            <p className="mt-3 text-xs text-zinc-500">Average over {week.length} logged day{week.length === 1 ? "" : "s"} in the last 7 days.</p>
           </>
         )}
       </section>
@@ -71,7 +73,14 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
 
       <Importer />
 
-      <form action={quickAdd} className={`${card} mt-6 space-y-3`}>
+      <ConfirmForm
+        action={quickAdd}
+        className={`${card} mt-6 space-y-3`}
+        dateField="day"
+        existingDays={rows.filter((d) => (d.calories ?? 0) > 0).map((d) => d.day)}
+        windowStart={since}
+        message={(day) => `Replace what's already logged for ${formatDay(day)}? This overwrites that day's totals.`}
+      >
         <h2 className="font-medium">Quick add a day</h2>
         <p className="text-sm text-zinc-500">Type in a day&apos;s totals. Replaces anything already logged for that date.</p>
         <div className="grid grid-cols-2 gap-3">
@@ -81,10 +90,8 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
           <input name="carbs_g" type="number" inputMode="decimal" placeholder="Carbs (g)" className={field} />
           <input name="fat_g" type="number" inputMode="decimal" placeholder="Fat (g)" className={field} />
         </div>
-        <button type="submit" className={`${btnGhost} w-full`}>
-          Save day
-        </button>
-      </form>
+        <SubmitButton className={`${btnGhost} w-full`}>Save day</SubmitButton>
+      </ConfirmForm>
 
       <form action={saveTargets} className={`${card} mt-6 space-y-4`}>
         <h2 className="font-medium">Daily targets</h2>
@@ -107,9 +114,7 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
             <input name="rest_fat_g" type="number" inputMode="numeric" placeholder="Fat (g)" defaultValue={profile?.rest_fat_g ?? ""} className={field} />
           </div>
         </fieldset>
-        <button type="submit" className={`${btnGhost} w-full`}>
-          Save targets
-        </button>
+        <SubmitButton className={`${btnGhost} w-full`}>Save targets</SubmitButton>
       </form>
 
       <h2 className="mt-8 text-sm text-zinc-400">Last 14 days</h2>

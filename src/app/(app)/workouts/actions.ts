@@ -30,7 +30,8 @@ function distanceFields(formData: FormData) {
 }
 
 function refresh() {
-  revalidatePath("/workouts");
+  // "layout" covers History, Calendar and every workout page under /workouts, not only the list.
+  revalidatePath("/workouts", "layout");
   revalidatePath("/dashboard");
 }
 
