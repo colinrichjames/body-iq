@@ -28,10 +28,23 @@ describe("recap", () => {
   ];
   it("lists skipped sets as skipped instead of dropping them", () => {
     const r = recap(logs);
-    expect(r[0]).toEqual({ exercise: "Bench", done: 1, skipped: 1, lines: ["135 × 8 @8", "skipped"] });
+    expect(r[0]).toEqual({ exercise: "Bench", done: 1, skipped: 1, lines: ["135 × 8 @8", "skipped"], notes: [] });
     expect(r[1].lines).toEqual(["12"]);
   });
   it("counts done and skipped separately", () => {
     expect(countSets(logs)).toEqual({ done: 2, skipped: 1 });
+  });
+});
+
+describe("recap notes", () => {
+  it("lists each distinct note once, in order", () => {
+    const r = recap([
+      { exercise: "Squat", set_number: 1, reps: 5, weight_lb: 135, note: "back squat" },
+      { exercise: "Squat", set_number: 2, reps: 5, weight_lb: 135, note: "back squat" },
+      { exercise: "Squat", set_number: 3, reps: 5, weight_lb: 95, note: "seated" },
+      { exercise: "Row", set_number: 1, reps: 10, weight_lb: 80 },
+    ]);
+    expect(r[0].notes).toEqual(["back squat", "seated"]);
+    expect(r[1].notes).toEqual([]);
   });
 });

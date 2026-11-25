@@ -15,13 +15,13 @@ export function skipExerciseLogs(steps: Step[], from: number): SetLog[] {
   return out;
 }
 
-export type ExerciseRecap = { exercise: string; done: number; skipped: number; lines: string[] };
+export type ExerciseRecap = { exercise: string; done: number; skipped: number; lines: string[]; /** Distinct notes across the sets, in the order written. */ notes: string[] };
 
 /** Per-exercise recap for the finish screen and detail page. Skipped sets are listed as skipped, never dropped. */
 export function recap(logs: SetLog[]): ExerciseRecap[] {
   const by = new Map<string, ExerciseRecap>();
   for (const l of logs) {
-    const r = by.get(l.exercise) ?? { exercise: l.exercise, done: 0, skipped: 0, lines: [] };
+    const r = by.get(l.exercise) ?? { exercise: l.exercise, done: 0, skipped: 0, lines: [], notes: [] };
     if (l.skipped) {
       r.skipped++;
       r.lines.push("skipped");
@@ -29,6 +29,8 @@ export function recap(logs: SetLog[]): ExerciseRecap[] {
       r.done++;
       r.lines.push(`${l.weight_lb !== null ? `${l.weight_lb} × ` : ""}${l.reps ?? "-"}${l.rpe ? ` @${l.rpe}` : ""}`);
     }
+    const note = l.note?.trim();
+    if (note && !r.notes.includes(note)) r.notes.push(note);
     by.set(l.exercise, r);
   }
   return [...by.values()];

@@ -45,7 +45,7 @@ export type WorkoutStatus = "planned" | "in_progress" | "completed" | "skipped";
 export type WorkoutProgress = { stepIndex: number; blockIndex: number; elapsedMs: number; updatedAt: string; blocks?: BlockLog[]; /** Order the remaining sets will be done in, as `exercise#set` keys. */ order?: string[]; /** Sets per exercise when changed during the session. */ totals?: Record<string, number> };
 
 /** One logged set from the player. A skipped set is kept on purpose so history shows it. */
-export type SetLog = { exercise: string; set_number: number; reps: number | null; weight_lb: number | null; rpe?: number | null; skipped?: boolean };
+export type SetLog = { exercise: string; set_number: number; reps: number | null; weight_lb: number | null; rpe?: number | null; skipped?: boolean; /** Free text such as "back squat" or "seated". */ note?: string | null };
 
 /** Result of one block (HYROX station, run leg...). seconds is null when skipped. */
 export type BlockLog = { name: string; seconds: number | null; skipped: boolean };
@@ -120,6 +120,7 @@ export type WorkoutSet = {
   weight_lb: number | null;
   rpe: number | null;
   skipped: boolean;
+  note: string | null;
   created_at: string;
 };
 

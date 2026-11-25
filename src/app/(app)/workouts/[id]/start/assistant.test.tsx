@@ -186,6 +186,24 @@ describe("flexible order", () => {
   });
 });
 
+describe("set notes", () => {
+  it("saves a note with the set and carries it to the next set of the same exercise", () => {
+    mount(strength);
+    fireEvent.change(screen.getByLabelText(/note \(optional\)/i), { target: { value: "back squat" } });
+    click(/done set/i);
+    click(/skip rest/i);
+    expect((screen.getByLabelText(/note \(optional\)/i) as HTMLInputElement).value).toBe("back squat");
+    const saved = (saveProgress.mock.calls.at(-1) as unknown as [{ sets: { note?: string | null }[] }])[0];
+    expect(saved.sets[0].note).toBe("back squat");
+  });
+  it("starts with an empty note on a different exercise", () => {
+    mount(strength);
+    fireEvent.change(screen.getByLabelText(/note \(optional\)/i), { target: { value: "wide stance" } });
+    click(/skip exercise/i);
+    expect((screen.getByLabelText(/note \(optional\)/i) as HTMLInputElement).value).toBe("");
+  });
+});
+
 describe("rest timer", () => {
   it("auto-advances about 3 s after rest ends (default on)", () => {
     mount(strength);
