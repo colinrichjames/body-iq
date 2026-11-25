@@ -6,6 +6,8 @@ import type { BlockLog, SetLog, Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, field } from "@/components/ui";
 import { buildSteps } from "@/lib/steps";
 import { elapsedMs as elapsedAt, pickResume } from "@/lib/progress";
+import { exerciseOverview, isDumbbell } from "@/lib/context";
+import { fmtTime } from "@/lib/hyrox";
 import { countSets, recap, skipExerciseLogs, skippedLog } from "@/lib/player";
 import { finishWorkout, saveProgress } from "../../actions";
 
@@ -39,7 +41,7 @@ const fmt = (totalSec: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-export function Assistant({ workout, lastWeights, lastTime, serverResume }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; serverResume: Resume | null }) {
+export function Assistant({ workout, lastWeights, lastTime, serverResume, targets = {}, targetRace = null }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; serverResume: Resume | null; targets?: Record<string, number>; targetRace?: string | null }) {
   const router = useRouter();
   const steps = useMemo(() => buildSteps(workout), [workout]);
   const blocks = workout.structure?.blocks ?? [];
@@ -93,6 +95,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
   const [eWeight, setEWeight] = useState("");
   const [eRpe, setERpe] = useState("");
   const [finished, setFinished] = useState(false);
+  const [showOverview, setShowOverview] = useState(false);
   const prefill = (i: number, done: SetLog[]) => {
     const st = steps[i];
     if (!st) return { reps: "", weight: "" };
@@ -397,7 +400,10 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
             {blockLogs.map((b, i) => (
               <li key={i} className="flex justify-between rounded-xl border border-zinc-800 px-3 py-2">
                 <span>{b.name}</span>
-                <span className={b.skipped ? "text-amber-400" : "tabular-nums text-zinc-400"}>{b.skipped ? "skipped" : fmt(b.seconds ?? 0)}</span>
+                <span className={b.skipped ? "text-amber-400" : "tabular-nums text-zinc-400"}>
+                  {b.skipped ? "skipped" : fmt(b.seconds ?? 0)}
+                  {!b.skipped && targets[b.name] ? ` (target ${fmtTime(targets[b.name])})` : ""}
+                </span>
               </li>
             ))}
           </ul>
@@ -553,6 +559,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
   // ------------------------------------------------------------------- sets
   if (mode === "sets" && step) {
     const nextUp = steps[stepIndex + 1];
+    const ov = exerciseOverview(steps, stepIndex);
     return (
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
         <Header title={workout.title} elapsed={elapsedSec} onQuit={quit} onPause={pause} />
@@ -560,14 +567,29 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
           <div className="h-full bg-emerald-500" style={{ width: `${(stepIndex / steps.length) * 100}%` }} />
         </div>
         <div className="flex-1 pt-8">
-          <p className="text-sm text-zinc-500">
+          <button type="button" onClick={() => setShowOverview((v) => !v)} aria-expanded={showOverview} className="text-left text-sm text-emerald-400">
+            Exercise {ov.position} of {ov.list.length} · {step.exercise} {showOverview ? "▴" : "▾"}
+          </button>
+          {showOverview && (
+            <ul className="mt-2 divide-y divide-zinc-800 rounded-xl border border-zinc-800 text-sm">
+              {ov.list.map((o) => (
+                <li key={o.name} className={`flex justify-between px-3 py-2 ${o.current ? "text-emerald-300" : o.setsDone >= o.totalSets ? "text-zinc-600" : "text-zinc-300"}`}>
+                  <span>{o.name}</span>
+                  <span className="tabular-nums">
+                    {o.setsDone}/{o.totalSets} sets
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-sm text-zinc-500">
             Set {step.setNumber} of {step.totalSets}
             {workout.structure?.rounds ? " (round)" : ""}
           </p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">{step.exercise}</h1>
           <p className="mt-2 text-zinc-400">
             Target: {step.seconds ? `${step.seconds} s` : `${step.reps ?? "-"} reps`}
-            {step.weight ? ` @ ${step.weight} lb` : ""}
+            {step.weight ? ` @ ${step.weight} lb${isDumbbell(step.exercise) ? " each" : ""}` : ""}
           </p>
           {step.note && <p className="mt-1 text-sm text-zinc-500">{step.note}</p>}
           {lastTime[step.exercise] && <p className="mt-1 text-sm text-emerald-400/80">Last time: {lastTime[step.exercise]}</p>}
@@ -578,7 +600,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
               <input value={reps} onChange={(e) => setReps(e.target.value)} type="number" inputMode="numeric" className={`${field} mt-1 text-2xl`} />
             </label>
             <label className="text-sm text-zinc-400">
-              Weight (lb)
+              {isDumbbell(step.exercise) ? "Weight per dumbbell (lb)" : "Weight (lb)"}
               <input value={weight} onChange={(e) => setWeight(e.target.value)} type="number" inputMode="decimal" step="2.5" className={`${field} mt-1 text-2xl`} />
             </label>
             <div className="col-span-2">
@@ -637,6 +659,13 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
         <div className="flex-1 pt-4">
           <h1 className="text-3xl font-semibold tracking-tight">{b.name}</h1>
           {b.minutes ? <p className="mt-1 text-zinc-500">Target {b.minutes} min</p> : null}
+          {targets[b.name] ? (
+            <p className="mt-1 text-emerald-400/90">
+              Target {fmtTime(targets[b.name])}
+              {/^run/i.test(b.name) ? " /km" : ""}
+              {targetRace ? <span className="text-zinc-500"> · from {targetRace} goal</span> : null}
+            </p>
+          ) : null}
           <p className="mt-3 text-lg text-zinc-300">{b.detail}</p>
           <p
             className={`mt-8 text-center text-7xl font-semibold tabular-nums ${b.minutes && blockSec > b.minutes * 60 ? "text-amber-400" : ""}`}

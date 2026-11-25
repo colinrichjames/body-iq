@@ -2,6 +2,9 @@ import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import type { Workout, WorkoutSet } from "@/lib/types";
 import { AssistantLoader } from "./assistant-loader";
+import { hyroxBlockTargets } from "@/lib/context";
+import { isHyrox } from "@/lib/hyrox";
+import type { Race } from "@/lib/types";
 
 export default async function StartWorkoutPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -46,5 +49,18 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
         }
       : null;
 
-  return <AssistantLoader workout={w} lastWeights={lastWeights} lastTime={lastTime} serverResume={serverResume} />;
+  // HYROX blocks show numeric targets from the next HYROX race that has a goal time.
+  let targets: Record<string, number> = {};
+  let targetRace: string | null = null;
+  if (w.structure?.blocks?.length && w.sport === "hyrox") {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: races } = await supabase.from("races").select("*").gte("race_date", today).order("race_date").returns<Race[]>();
+    const race = (races ?? []).find((r) => isHyrox(r.race_type) && r.goal_time_sec);
+    if (race) {
+      targets = hyroxBlockTargets(w.structure.blocks, race.goal_time_sec);
+      targetRace = race.name;
+    }
+  }
+
+  return <AssistantLoader workout={w} lastWeights={lastWeights} lastTime={lastTime} serverResume={serverResume} targets={targets} targetRace={targetRace} />;
 }
