@@ -11,7 +11,9 @@ import { computeReadiness } from "@/lib/readiness";
 import { fuelForDay } from "@/lib/fuel";
 import { classify } from "@/lib/intensity";
 import { swapHardSession } from "../workouts/actions";
-import { saveGuestAccount } from "./guest-actions";
+import { dismissChecklist, saveGuestAccount } from "./guest-actions";
+import { buildChecklist } from "@/lib/checklist";
+import { FirstRunChecklist } from "@/components/first-run-checklist";
 import { targetsFor } from "@/lib/targets";
 import type { BodyScan, DailyHealth, NutritionDay, Profile, Race, SyncRun, Workout } from "@/lib/types";
 
@@ -37,7 +39,7 @@ export default async function DashboardPage() {
   const { supabase, userId, email, isGuest } = await requireUser();
   const today = await getToday();
 
-  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, syncRes] = await Promise.all([
+  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, syncRes, raceCount, workoutCount, scanCount, foodCount, garminConn] = await Promise.all([
     supabase.from("body_scans").select("*").order("scanned_at", { ascending: false }).limit(2).returns<BodyScan[]>(),
     supabase.from("workouts").select("*").gte("workout_date", addDays(today, -27)).lte("workout_date", addDays(today, 1)).returns<Workout[]>(),
     supabase.from("nutrition_days").select("*").gte("day", addDays(today, -13)).order("day", { ascending: false }).returns<NutritionDay[]>(),
@@ -45,7 +47,21 @@ export default async function DashboardPage() {
     supabase.from("races").select("*").gte("race_date", today).order("race_date").limit(1).returns<Race[]>(),
     supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(14).returns<DailyHealth[]>(),
     supabase.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(1).returns<SyncRun[]>(),
+    supabase.from("races").select("id", { count: "exact", head: true }),
+    supabase.from("workouts").select("id", { count: "exact", head: true }),
+    supabase.from("body_scans").select("id", { count: "exact", head: true }),
+    supabase.from("food_entries").select("id", { count: "exact", head: true }),
+    supabase.from("garmin_connections").select("user_id", { count: "exact", head: true }),
   ]);
+  const checklist = buildChecklist({
+    races: raceCount.count ?? 0,
+    hasTargets: !!profileRes.data?.calorie_target && !!profileRes.data?.protein_target_g,
+    scans: scanCount.count ?? 0,
+    workouts: workoutCount.count ?? 0,
+    foodEntries: foodCount.count ?? 0,
+    garminConnected: (garminConn.count ?? 0) > 0,
+  });
+  const showChecklist = !profileRes.data?.onboarding_dismissed_at;
   const scans = scansRes.data ?? [];
   const [latest, previous] = scans;
   const workouts = workoutsRes.data ?? [];
@@ -93,6 +109,8 @@ export default async function DashboardPage() {
           </form>
         </div>
       </header>
+
+      {showChecklist && <FirstRunChecklist items={checklist} dismiss={dismissChecklist} />}
 
       {isGuest && (
         <section className="mt-4 rounded-2xl border border-amber-700/50 bg-amber-950/20 p-4">

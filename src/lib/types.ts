@@ -141,6 +141,7 @@ export type Profile = {
   rest_protein_g: number | null;
   rest_carbs_g: number | null;
   rest_fat_g: number | null;
+  onboarding_dismissed_at: string | null;
 };
 
 export type HyroxBenchmark = {
