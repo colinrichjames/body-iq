@@ -3,11 +3,12 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { friendlyAuthError } from "@/lib/auth-errors";
 
 export async function sendMagicLink(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email || !email.includes("@")) {
-    redirect(`/login?error=${encodeURIComponent("Enter a valid email address.")}`);
+    redirect(`/login?error=${encodeURIComponent("Enter a valid email address.")}&email=${encodeURIComponent(email)}`);
   }
 
   const h = await headers();
@@ -21,7 +22,7 @@ export async function sendMagicLink(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(`/login?error=${encodeURIComponent(friendlyAuthError(error.message, error.code))}&email=${encodeURIComponent(email)}`);
   }
   redirect(`/login?sent=${encodeURIComponent(email)}`);
 }
@@ -33,7 +34,7 @@ export async function continueAsGuest() {
   if (error) {
     const off = /anonymous/i.test(error.message);
     redirect(
-      `/login?error=${encodeURIComponent(off ? "Guest mode isn't turned on yet. Use your email for now." : error.message)}`,
+      `/login?error=${encodeURIComponent(off ? friendlyAuthError(error.message) : friendlyAuthError(error.message, error.code))}`,
     );
   }
   redirect("/dashboard");
