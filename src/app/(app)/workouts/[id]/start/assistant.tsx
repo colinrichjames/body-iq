@@ -104,17 +104,21 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const [eReps, setEReps] = useState("");
   const [eWeight, setEWeight] = useState("");
   const [eRpe, setERpe] = useState("");
+  const [eNote, setENote] = useState("");
   const [finished, setFinished] = useState(false);
   const [showOverview, setShowOverview] = useState(false);
   const prefill = (i: number, done: SetLog[], list: typeof steps = steps) => {
     const st = list[i];
-    if (!st) return { reps: "", weight: "" };
+    if (!st) return { reps: "", weight: "", note: "" };
     const prev = [...done].reverse().find((l) => l.exercise === st.exercise && l.weight_lb !== null)?.weight_lb;
     const w = prev ?? lastWeights[st.exercise] ?? st.weight;
-    return { reps: String(st.seconds ?? st.reps ?? ""), weight: w !== undefined && w !== null ? String(w) : "" };
+    // The note carries to the next set of the same exercise, so "back squat" is typed once.
+    const lastOfExercise = [...done].reverse().find((l) => l.exercise === st.exercise && !l.skipped);
+    return { reps: String(st.seconds ?? st.reps ?? ""), weight: w !== undefined && w !== null ? String(w) : "", note: lastOfExercise?.note ?? "" };
   };
   const [reps, setReps] = useState(() => prefill(stepIndex, saved?.logs ?? []).reps);
   const [weight, setWeight] = useState(() => prefill(stepIndex, saved?.logs ?? []).weight);
+  const [setNote, setSetNote] = useState(() => prefill(stepIndex, saved?.logs ?? []).note);
   // Summary fields (notes, RPE, minutes, HR, power) are kept on this phone too, so a refresh doesn't lose what you typed.
   const sumKey = `${draftKey}-summary`;
   const [sum0] = useState<Partial<Record<"notes" | "rpe" | "minutes" | "avgHr" | "avgPower" | "fuelCarbs" | "fluidMl" | "sodiumMg", string>>>(() => {
@@ -175,7 +179,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const step = steps[stepIndex];
   const plates = (() => {
     const w = Number(weight);
-    if (!step || !Number.isFinite(w) || w <= 45 || !/barbell|squat|deadlift|bench|press|rdl|romanian/i.test(step.exercise) || /dumbbell|goblet/i.test(step.exercise)) return null;
+    if (!step || !Number.isFinite(w) || w <= 45 || !/barbell|squat|deadlift|bench|press|rdl|romanian/i.test(step.exercise) || /dumbbell|goblet|leg press|machine|cable|smith|hack|seated|incline walk/i.test(step.exercise)) return null;
     let side = (w - 45) / 2;
     const out: number[] = [];
     for (const p of [45, 35, 25, 10, 5, 2.5]) while (side >= p - 1e-9) { out.push(p); side -= p; }
@@ -260,6 +264,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     const next = prefill(nextIndex, nextLogs);
     setReps(next.reps);
     setWeight(next.weight);
+    setSetNote(next.note);
     setStepIndex(nextIndex);
   }
 
@@ -269,7 +274,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     const w = weight.trim() === "" ? null : Number(weight);
     navigator.vibrate?.(30);
     advanceTo(
-      [...logs, { exercise: step.exercise, set_number: step.setNumber, reps: Number.isFinite(r) ? r : null, weight_lb: Number.isFinite(w) ? w : null, rpe: setRpeVal === "" ? null : Number(setRpeVal) }],
+      [...logs, { exercise: step.exercise, set_number: step.setNumber, reps: Number.isFinite(r) ? r : null, weight_lb: Number.isFinite(w) ? w : null, rpe: setRpeVal === "" ? null : Number(setRpeVal), note: setNote.trim() || null }],
       stepIndex + 1,
       step.restAfter,
     );
@@ -311,6 +316,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
       const fresh = prefill(stepIndex, logs, next);
       setReps(fresh.reps);
       setWeight(fresh.weight);
+      setSetNote(fresh.note);
       setSetRpeVal("");
       setRestEnd(null);
     }
@@ -333,6 +339,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
       setReps(prev && !prev.skipped && prev.reps !== null ? String(prev.reps) : fresh.reps);
       setWeight(prev && !prev.skipped && prev.weight_lb !== null ? String(prev.weight_lb) : fresh.weight);
       setSetRpeVal(prev?.rpe ? String(prev.rpe) : "");
+      setSetNote(prev && !prev.skipped ? (prev.note ?? "") : fresh.note);
       setStepIndex(target);
       void persist({ logs: nextLogs, stepIndex: target });
     } else if (mode === "blocks") {
@@ -352,6 +359,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     setEReps(last.reps !== null ? String(last.reps) : "");
     setEWeight(last.weight_lb !== null ? String(last.weight_lb) : "");
     setERpe(last.rpe ? String(last.rpe) : "");
+    setENote(last.note ?? "");
     setEditing(true);
   }
 
@@ -359,7 +367,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     const r = eReps.trim() === "" ? null : Number(eReps);
     const w = eWeight.trim() === "" ? null : Number(eWeight);
     const nextLogs = logs.map((l, i) =>
-      i === logs.length - 1 ? { ...l, reps: r !== null && Number.isFinite(r) ? r : null, weight_lb: w !== null && Number.isFinite(w) ? w : null, rpe: eRpe === "" ? null : Number(eRpe) } : l,
+      i === logs.length - 1 ? { ...l, reps: r !== null && Number.isFinite(r) ? r : null, weight_lb: w !== null && Number.isFinite(w) ? w : null, rpe: eRpe === "" ? null : Number(eRpe), note: eNote.trim() || null } : l,
     );
     setLogs(nextLogs);
     latest.current = { ...latest.current, logs: nextLogs };
@@ -470,6 +478,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
             {recap(logs).map((r) => (
               <li key={r.exercise} className="rounded-xl border border-zinc-800 px-3 py-2">
                 <p className="font-medium">{r.exercise}</p>
+                {r.notes.length > 0 && <p className="text-xs text-emerald-400/80">{r.notes.join(" · ")}</p>}
                 <p className="text-zinc-400">
                   {r.lines.map((l, i) => (
                     <span key={i} className={l === "skipped" ? "text-amber-400" : ""}>
@@ -641,6 +650,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
                     ))}
                   </select>
                 </div>
+                <input value={eNote} onChange={(e) => setENote(e.target.value)} type="text" maxLength={200} placeholder="Note" className={field} aria-label="Set note" />
                 <div className="grid grid-cols-2 gap-2">
                   <button onClick={() => setEditing(false)} className={btnGhost}>
                     Cancel
@@ -761,6 +771,10 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
                 ))}
               </div>
             </div>
+            <label className="col-span-2 text-sm text-zinc-400">
+              Note (optional)
+              <input value={setNote} onChange={(e) => setSetNote(e.target.value)} type="text" maxLength={200} placeholder="e.g. back squat, seated, tempo" className={`${field} mt-1`} />
+            </label>
             {plates && (
               <p className="col-span-2 text-sm text-zinc-500">
                 Barbell (45 lb bar): {plates.length ? `${plates.join(" + ")} per side` : "bar only"}

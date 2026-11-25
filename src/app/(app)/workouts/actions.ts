@@ -152,6 +152,8 @@ function cleanBlocks(blocks: BlockLog[] | undefined): BlockLog[] | null {
   }));
 }
 
+const cleanNote = (n: unknown): string | null => (typeof n === "string" && n.trim() ? n.trim().slice(0, 200) : null);
+
 function cleanOrder(order: string[] | undefined): string[] | null {
   if (!Array.isArray(order) || !order.length) return null;
   return order.filter((k) => typeof k === "string").slice(0, 500).map((k) => k.slice(0, 160));
@@ -230,6 +232,7 @@ export async function finishWorkout(input: {
       weight_lb: s.weight_lb,
       rpe: s.rpe !== null && s.rpe !== undefined && s.rpe >= 1 && s.rpe <= 10 ? s.rpe : null,
       skipped: s.skipped === true,
+      note: cleanNote(s.note),
     }));
   if (rows.length) {
     const { error: setError } = await supabase.from("workout_sets").insert(rows);
@@ -441,6 +444,7 @@ export async function saveProgress(input: {
         weight_lb: x.weight_lb,
         rpe: x.rpe !== null && x.rpe !== undefined && x.rpe >= 1 && x.rpe <= 10 ? x.rpe : null,
         skipped: x.skipped === true,
+        note: cleanNote(x.note),
       })),
     );
     if (setError) return { error: setError.message };

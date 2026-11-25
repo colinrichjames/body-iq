@@ -72,7 +72,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       loggedSets.map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped })),
     ).catch(() => insights);
   }
-  const recapRows = recap(loggedSets.map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped })));
+  const recapRows = recap(loggedSets.map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped, note: r.note })));
   const exSteps = buildSteps(w);
   const blockRows = w.status === "completed" || w.status === "in_progress" ? (w.status === "in_progress" ? (w.progress?.blocks ?? []) : (w.block_results ?? [])) : [];
 
@@ -142,6 +142,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
             {recapRows.map((r) => (
               <li key={r.exercise}>
                 <p className="font-medium">{r.exercise}</p>
+                {r.notes.length > 0 && <p className="text-xs text-emerald-400/80">{r.notes.join(" · ")}</p>}
                 <p className="text-zinc-400">
                   {r.lines.map((l, i) => (
                     <span key={i} className={l === "skipped" ? "text-amber-400" : ""}>
