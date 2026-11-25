@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { addDays, diffDays, formatDay } from "@/lib/dates";
-import { computeInsights } from "@/lib/insights";
+import { computeInsights, SCORE_NAME } from "@/lib/insights";
 import { currentPhase, raceLabel } from "@/lib/plan";
 import { getToday } from "@/lib/today";
 import { computeReadiness } from "@/lib/readiness";
@@ -43,7 +43,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     supabase.from("nutrition_days").select("*").gte("day", addDays(today, -13)).order("day", { ascending: false }).returns<NutritionDay[]>(),
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
     supabase.from("races").select("*").gte("race_date", today).order("race_date").limit(1).returns<Race[]>(),
-    supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(8).returns<DailyHealth[]>(),
+    supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(14).returns<DailyHealth[]>(),
     supabase.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(1).returns<SyncRun[]>(),
   ]);
   const scans = scansRes.data ?? [];
@@ -64,6 +64,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     scans,
     workouts,
     nutrition: nutritionRes.data ?? [],
+    health: healthRes.data ?? [],
     profile: profileRes.data ?? null,
     nextRace,
   });
@@ -223,12 +224,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       )}
 
       <section className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-        <h2 className="text-sm text-zinc-400">Health score</h2>
+        <h2 className="text-sm text-zinc-400">{SCORE_NAME}</h2>
         <p className={`mt-2 text-4xl font-semibold tabular-nums ${insights.score === null ? "text-zinc-600" : ""}`}>
           {insights.score ?? "--"}
         </p>
         <p className="mt-1 text-xs text-zinc-500">
-          {insights.score === null ? "Not enough data yet." : `Based on ${insights.available} of 5 categories.`}
+          {insights.score === null ? "Not enough data yet. See what each part needs below." : `Based on ${insights.available} of 5 categories. Recalculated every time you open this page.`}
         </p>
         <ul className="mt-4 space-y-2">
           {insights.categories.map((c) => (
@@ -238,9 +239,24 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <span className="tabular-nums text-zinc-400">{c.score === null ? "--" : `${c.score} / ${c.max}`}</span>
               </div>
               <p className="text-xs text-zinc-500">{c.note}</p>
+              {c.missing && <p className="text-xs text-amber-400">Missing: {c.missing}</p>}
             </li>
           ))}
         </ul>
+        <details className="mt-4 border-t border-zinc-800 pt-3 text-xs text-zinc-400">
+          <summary className="cursor-pointer text-sm text-emerald-400">How the {SCORE_NAME} works</summary>
+          <p className="mt-2">
+            Each category earns points up to its maximum (Nutrition 20, Training 25, Recovery 25, Body composition 20, Activity 10). The score is points earned ÷ points possible, over
+            the categories that have enough data, as a number from 0 to 100. A category with no data is left out, not counted as zero, so adding data can move the score either way.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {insights.categories.map((c) => (
+              <li key={c.key}>
+                <span className="text-zinc-200">{c.label} ({c.max}):</span> {c.rule}
+              </li>
+            ))}
+          </ul>
+        </details>
         {insights.bullets.length > 0 && (
           <ul className="mt-4 list-disc space-y-1 border-t border-zinc-800 pl-5 pt-4 text-sm text-zinc-300">
             {insights.bullets.map((b, i) => (
