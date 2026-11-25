@@ -154,7 +154,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               ))}
             </ul>
             <p className="mt-3 text-xs text-zinc-500">
-              Based on {formatDay(readiness.day)}. Rules: sleep, HRV vs 7-day baseline, resting HR, Body Battery, stress.
+              Based on {formatDay(readiness.day)}. Rules: sleep, HRV vs 7-day baseline, resting HR, Body Battery, stress.{" "}
+              <Link href="/recovery" className="text-emerald-400">
+                See the full breakdown
+              </Link>
             </p>
           </>
         ) : (
