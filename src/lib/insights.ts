@@ -154,7 +154,7 @@ export function computeInsights(input: {
       parts.push(clamp01(avg(hrvs) / avg(hrvBase) / 0.95));
       bits.push(`HRV ${Math.round(avg(hrvs))} ms`);
     }
-    const rule = "Last 7 days from Garmin: sleep vs 7.5 h, Body Battery peak vs 80, HRV vs your earlier baseline (needs 3 earlier days). Needs 1+ day with sleep or Body Battery.";
+    const rule = "Last 7 days from Garmin or your check-ins: sleep vs 7.5 h, Body Battery peak vs 80, HRV vs your earlier baseline (needs 3 earlier days). Needs 1+ day with sleep or Body Battery.";
     if (parts.length) {
       categories.push({ key: "recovery", label: "Recovery", max: 25, score: Math.round(25 * avg(parts) * 10) / 10, note: `Avg ${bits.join(", ")} over ${week.length} day${week.length === 1 ? "" : "s"}.`, missing: null, rule });
     } else {
@@ -164,7 +164,7 @@ export function computeInsights(input: {
         max: 25,
         score: null,
         note: "No sleep or Body Battery data in the last 7 days.",
-        missing: health.length ? "Sleep or Body Battery from the last 7 days (sync Garmin)." : "Garmin sync with sleep or Body Battery (connect Garmin).",
+        missing: health.length ? "Sleep or Body Battery from the last 7 days (sync Garmin or add a check-in)." : "A daily check-in with your sleep, or a Garmin sync (connect Garmin).",
         rule,
       });
     }

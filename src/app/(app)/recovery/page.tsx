@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { formatDay } from "@/lib/dates";
-import { computeReadiness } from "@/lib/readiness";
+import { computeReadiness, mergeCheckins } from "@/lib/readiness";
+import { getToday } from "@/lib/today";
+import { CheckinCard } from "@/components/checkin-card";
 import { explainDay, loadBand, toneClass } from "@/lib/recovery";
 import { card } from "@/components/ui";
-import type { DailyHealth } from "@/lib/types";
+import type { DailyHealth, RecoveryCheckin } from "@/lib/types";
 
 type Activity = {
   id: string;
@@ -21,8 +23,10 @@ const mins = (s: number | null) => (s === null ? "" : `${Math.round(s / 60)} min
 
 export default async function RecoveryPage() {
   const { supabase } = await requireUser();
-  const [healthRes, actRes] = await Promise.all([
+  const today = await getToday();
+  const [healthRes, checkinRes, actRes] = await Promise.all([
     supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(14).returns<DailyHealth[]>(),
+    supabase.from("recovery_checkins").select("day,sleep_hours,soreness,energy").order("day", { ascending: false }).limit(14).returns<RecoveryCheckin[]>(),
     supabase
       .from("activities")
       .select("id,sport,title,started_at,duration_sec,distance_m,avg_hr,training_load")
@@ -30,18 +34,23 @@ export default async function RecoveryPage() {
       .limit(20)
       .returns<Activity[]>(),
   ]);
-  const rows = healthRes.data ?? [];
+  const checkins = checkinRes.data ?? [];
+  const rows = mergeCheckins(healthRes.data ?? [], checkins);
+  const todaysCheckin = checkins.find((c) => c.day === today) ?? null;
   const acts = actRes.data ?? [];
   const readiness = computeReadiness(rows);
 
   return (
     <main className="mx-auto max-w-md px-5 pb-28 pt-8">
       <h1 className="text-2xl font-semibold">Recovery</h1>
-      <p className="mt-1 text-sm text-zinc-400">Your Garmin numbers, scored against your own 7-day baseline.</p>
+      <p className="mt-1 text-sm text-zinc-400">Your Garmin numbers and daily check-ins, scored against your own 7-day baseline.</p>
+      <div className="mt-4">
+        <CheckinCard today={today} existing={todaysCheckin} from="/recovery" />
+      </div>
 
       {rows.length === 0 ? (
         <section className={`mt-5 ${card}`}>
-          <p className="text-sm text-zinc-400">No Garmin data yet.</p>
+          <p className="text-sm text-zinc-400">No recovery data yet. Save a check-in above to get a readiness call, or connect a watch for sleep, HRV and Body Battery.</p>
           <Link href="/connect" className="mt-2 inline-block text-sm text-emerald-400">
             Connect Garmin and sync
           </Link>
@@ -68,7 +77,7 @@ export default async function RecoveryPage() {
               <details key={day.day} open={i === 0} className={card}>
                 <summary className="cursor-pointer text-sm font-medium">{formatDay(day.day)}</summary>
                 <ul className="mt-3 space-y-3">
-                  {explainDay(day, rows.slice(i + 1)).map((m) => (
+                  {(day.manual ? [] : explainDay(day, rows.slice(i + 1))).map((m) => (
                     <li key={m.key}>
                       <div className="flex justify-between gap-3 text-sm">
                         <span className="text-zinc-400">{m.label}</span>
@@ -77,6 +86,16 @@ export default async function RecoveryPage() {
                       <p className="text-xs text-zinc-500">{m.meaning}</p>
                     </li>
                   ))}
+                  {(day.sleep_seconds !== null && day.manual) || day.soreness || day.energy ? (
+                    <li>
+                      <div className="flex justify-between gap-3 text-sm">
+                        <span className="text-zinc-400">Your check-in</span>
+                        <span className="text-zinc-300">
+                          {[day.manual && day.sleep_seconds !== null ? `${(day.sleep_seconds / 3600).toFixed(1)} h sleep` : null, day.soreness ? `soreness ${day.soreness}/5` : null, day.energy ? `energy ${day.energy}/5` : null].filter(Boolean).join(" · ")}
+                        </span>
+                      </div>
+                    </li>
+                  ) : null}
                 </ul>
               </details>
             ))}

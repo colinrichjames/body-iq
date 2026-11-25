@@ -174,6 +174,12 @@ export type DailyHealth = {
   steps: number | null;
 };
 
+/** A day's self-reported recovery, for people without a watch (or to add to one). Soreness and energy are 1-5. */
+export type RecoveryCheckin = { user_id?: string; day: string; sleep_hours: number | null; soreness: number | null; energy: number | null };
+
+/** A day of recovery data: Garmin numbers, a manual check-in, or both. */
+export type HealthDay = DailyHealth & { soreness?: number | null; energy?: number | null; manual?: boolean };
+
 export type SyncRun = {
   id: string;
   source: string;
