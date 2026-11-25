@@ -1,5 +1,6 @@
 "use server";
 
+import { isUnit, paceProblem, toKm, type DistUnit } from "@/lib/distance";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
@@ -19,6 +20,13 @@ function numOrNull(v: FormDataEntryValue | null): number | null {
   if (!s) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Planned distance typed in mi or km, stored as km (4 decimals) with the unit the user picked. */
+function distanceFields(formData: FormData) {
+  const unit = isUnit(formData.get("distance_unit")) ? (formData.get("distance_unit") as DistUnit) : "mi";
+  const v = numOrNull(formData.get("planned_distance"));
+  return { planned_distance_km: v !== null && v > 0 && v < 1000 ? toKm(v, unit) : null, distance_unit: unit };
 }
 
 function refresh() {
@@ -44,6 +52,7 @@ export async function addWorkout(formData: FormData) {
     title,
     description: String(formData.get("description") ?? "").trim() || null,
     planned_duration_min: numOrNull(formData.get("planned_duration_min")),
+    ...distanceFields(formData),
     structure: buildStructure(null, exercisesFromForm(formData), numOrNull(formData.get("rounds")), numOrNull(formData.get("rest_sec"))),
     generated: false,
     status: "planned",
@@ -97,6 +106,7 @@ export async function finishWorkout(input: {
   rpe: number | null;
   notes: string;
   distanceKm?: number | null;
+  distanceUnit?: DistUnit;
   avgHr?: number | null;
   avgPower?: number | null;
   blocks?: BlockLog[];
@@ -104,17 +114,25 @@ export async function finishWorkout(input: {
   const { supabase, userId } = await requireUser();
   const rpe = input.rpe !== null && input.rpe >= 1 && input.rpe <= 10 ? Math.round(input.rpe) : null;
 
+  const { data: cur } = await supabase.from("workouts").select("sport").eq("id", input.id).maybeSingle<{ sport: string }>();
+  const km = input.distanceKm && input.distanceKm > 0 && input.distanceKm < 1000 ? Math.round(input.distanceKm * 10000) / 10000 : null;
+  if (cur?.sport === "run") {
+    const problem = paceProblem(input.actualMinutes, km);
+    if (problem) return { error: problem };
+  }
+
   const { error } = await supabase
     .from("workouts")
     .update({
       status: "completed",
+      ...(input.distanceUnit && isUnit(input.distanceUnit) ? { distance_unit: input.distanceUnit } : {}),
       progress: null,
       block_results: cleanBlocks(input.blocks),
       completed_at: new Date().toISOString(),
       actual_duration_min: input.actualMinutes !== null ? Math.max(0, Math.round(input.actualMinutes)) : null,
       rpe,
       notes: input.notes.trim() || null,
-      actual_distance_km: input.distanceKm && input.distanceKm > 0 && input.distanceKm < 1000 ? Math.round(input.distanceKm * 100) / 100 : null,
+      actual_distance_km: km,
       avg_hr: input.avgHr && input.avgHr >= 30 && input.avgHr <= 250 ? Math.round(input.avgHr) : null,
       avg_power: input.avgPower && input.avgPower >= 0 && input.avgPower <= 3000 ? Math.round(input.avgPower) : null,
     })
@@ -211,6 +229,7 @@ export async function updateWorkout(formData: FormData) {
       workout_date: date,
       description: String(formData.get("description") ?? "").trim() || null,
       planned_duration_min: numOrNull(formData.get("planned_duration_min")),
+      ...distanceFields(formData),
       structure,
       generated: false,
     })

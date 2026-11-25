@@ -28,6 +28,13 @@ export default async function NewWorkoutPage({ searchParams }: { searchParams: P
           </select>
           <input name="planned_duration_min" type="number" inputMode="numeric" min="1" placeholder="Minutes" className={field} />
         </div>
+        <div className="grid grid-cols-[1fr_auto] gap-3">
+          <input name="planned_distance" type="number" inputMode="decimal" step="any" min="0" defaultValue={""} placeholder="Distance (optional)" className={field} aria-label="Planned distance" />
+          <select name="distance_unit" defaultValue={"mi"} className={field} aria-label="Distance unit">
+            <option value="mi">mi</option>
+            <option value="km">km</option>
+          </select>
+        </div>
         <input name="workout_date" type="date" defaultValue={date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : today} required className={field} />
         <textarea name="description" rows={4} placeholder="Details, e.g. 10 min warm-up, 3 x 8 min at threshold" className={field} />
         <ExerciseEditor initial={[]} />

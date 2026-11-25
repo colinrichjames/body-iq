@@ -92,6 +92,8 @@ export type Workout = {
   generated: boolean;
   actual_duration_min: number | null;
   actual_distance_km: number | null;
+  planned_distance_km: number | null;
+  distance_unit: "mi" | "km";
   avg_hr: number | null;
   avg_power: number | null;
   activity_id: string | null;

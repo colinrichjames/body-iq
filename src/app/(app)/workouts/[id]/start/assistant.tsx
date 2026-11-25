@@ -7,8 +7,9 @@ import { btnGhost, btnPrimary, field } from "@/components/ui";
 import { buildSteps } from "@/lib/steps";
 import { elapsedMs as elapsedAt, pickResume } from "@/lib/progress";
 import { exerciseOverview, isDumbbell } from "@/lib/context";
+import { fmtPace, fromKm, paceProblem, toKm, type DistUnit } from "@/lib/distance";
 import { fmtTime } from "@/lib/hyrox";
-import { countSets, recap, skipExerciseLogs, skippedLog } from "@/lib/player";
+import { countSets, recap, totalVolume, volumeByExercise, skipExerciseLogs, skippedLog } from "@/lib/player";
 import { finishWorkout, saveProgress } from "../../actions";
 
 type Resume = { logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; elapsedMs: number };
@@ -41,7 +42,7 @@ const fmt = (totalSec: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-export function Assistant({ workout, lastWeights, lastTime, serverResume, targets = {}, targetRace = null }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; serverResume: Resume | null; targets?: Record<string, number>; targetRace?: string | null }) {
+export function Assistant({ workout, lastWeights, lastTime, serverResume, targets = {}, targetRace = null, lastVolume = {}, lastEndurance = null, plannedDistanceKm = null, distanceUnit = "mi" }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; serverResume: Resume | null; targets?: Record<string, number>; targetRace?: string | null; lastVolume?: Record<string, number>; lastEndurance?: { date: string; km: number | null; minutes: number | null } | null; plannedDistanceKm?: number | null; distanceUnit?: DistUnit }) {
   const router = useRouter();
   const steps = useMemo(() => buildSteps(workout), [workout]);
   const blocks = workout.structure?.blocks ?? [];
@@ -107,7 +108,8 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const [weight, setWeight] = useState(() => prefill(0, []).weight);
   const [rpe, setRpe] = useState("");
   const [setRpeVal, setSetRpeVal] = useState("");
-  const [distance, setDistance] = useState("");
+  const [unit, setUnit] = useState<DistUnit>(distanceUnit);
+  const [distance, setDistance] = useState(() => (plannedDistanceKm ? String(fromKm(plannedDistanceKm, distanceUnit)) : ""));
   const [avgHr, setAvgHr] = useState("");
   const [avgPower, setAvgPower] = useState("");
   const endurance = ["run", "bike", "swim", "hyrox"].includes(workout.sport);
@@ -333,13 +335,23 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     setSaving(true);
     setError(null);
     const m = Number(minutes);
+    const km = distance === "" ? null : toKm(Number(distance), unit);
+    if (workout.sport === "run") {
+      const problem = paceProblem(Number.isFinite(m) && minutes !== "" ? m : null, km);
+      if (problem) {
+        setError(problem);
+        setSaving(false);
+        return;
+      }
+    }
     const res = await finishWorkout({
       id: workout.id,
       sets: logs,
       actualMinutes: Number.isFinite(m) && minutes !== "" ? m : null,
       rpe: rpe === "" ? null : Number(rpe),
       notes,
-      distanceKm: distance === "" ? null : Number(distance) * 1.609344,
+      distanceKm: km,
+      distanceUnit: unit,
       avgHr: avgHr === "" ? null : Number(avgHr),
       avgPower: avgPower === "" ? null : Number(avgPower),
       blocks: blockLogs,
@@ -372,12 +384,15 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
         <h1 className="text-2xl font-semibold tracking-tight">Nice work</h1>
         <p className="mt-1 text-zinc-400">
           {workout.title} &middot;{" "}
-          {mode === "sets"
+          {mode === "sets" && (!endurance || countSets(logs).done > 0)
             ? `${countSets(logs).done} set${countSets(logs).done === 1 ? "" : "s"} logged${countSets(logs).skipped ? `, ${countSets(logs).skipped} skipped` : ""}`
             : mode === "blocks"
               ? `${blockLogs.filter((b) => !b.skipped).length} of ${blocks.length} blocks done${blockLogs.some((b) => b.skipped) ? `, ${blockLogs.filter((b) => b.skipped).length} skipped` : ""}`
               : `${fmt(elapsedSec)} elapsed`}
         </p>
+        {mode === "sets" && totalVolume(logs) > 0 && (
+          <p className="mt-1 text-sm text-zinc-400">Total volume {Math.round(totalVolume(logs)).toLocaleString("en-US")} lb</p>
+        )}
         {mode === "sets" && logs.length > 0 && (
           <ul className="mt-4 space-y-2 text-sm">
             {recap(logs).map((r) => (
@@ -391,6 +406,18 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
                     </span>
                   ))}
                 </p>
+                {(() => {
+                  const vol = volumeByExercise(logs)[r.exercise];
+                  const prev = lastVolume[r.exercise];
+                  if (!vol) return null;
+                  const d = prev ? Math.round(vol - prev) : null;
+                  return (
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      Volume {Math.round(vol).toLocaleString("en-US")} lb
+                      {d !== null ? ` · ${d >= 0 ? "+" : ""}${d.toLocaleString("en-US")} lb vs last time` : ""}
+                    </p>
+                  );
+                })()}
               </li>
             ))}
           </ul>
@@ -417,8 +444,14 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
             <>
               <div className="grid grid-cols-3 gap-3">
                 <label className="text-sm text-zinc-400">
-                  Distance (mi)
-                  <input value={distance} onChange={(e) => setDistance(e.target.value)} type="number" inputMode="decimal" step="any" className={`${field} mt-1`} />
+                  Distance
+                  <div className="mt-1 flex gap-1">
+                    <input value={distance} onChange={(e) => setDistance(e.target.value)} type="number" inputMode="decimal" step="any" className={`${field} min-w-0`} aria-label="Distance" />
+                    <select value={unit} onChange={(e) => setUnit(e.target.value as DistUnit)} className={`${field} w-16 px-1`} aria-label="Distance unit">
+                      <option value="mi">mi</option>
+                      <option value="km">km</option>
+                    </select>
+                  </div>
                 </label>
                 <label className="text-sm text-zinc-400">
                   Avg HR
@@ -431,10 +464,10 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
               </div>
               {distance !== "" && Number(minutes) > 0 && Number(distance) > 0 && (
                 <p className="text-sm text-zinc-500">
-                  Pace {(() => {
-                    const p = Number(minutes) / Number(distance);
-                    return `${Math.floor(p)}:${String(Math.round((p % 1) * 60)).padStart(2, "0")} /mi`;
-                  })()}
+                  Pace {fmtPace(Number(minutes), toKm(Number(distance), unit), unit)}
+                  {lastEndurance?.km && lastEndurance.minutes
+                    ? ` · last time ${fmtPace(lastEndurance.minutes, lastEndurance.km, unit)} over ${fromKm(lastEndurance.km, unit)} ${unit}`
+                    : ""}
                 </p>
               )}
             </>

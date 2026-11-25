@@ -200,3 +200,40 @@ describe("HYROX block player", () => {
     expect(screen.getByText(/paused/i)).toBeTruthy();
   });
 });
+
+describe("endurance finish", () => {
+  const run = { id: "w3", sport: "run", title: "Easy run", description: null, status: "planned", structure: null } as unknown as Workout;
+  const goFinish = () => {
+    mount(run);
+    click(/^finish$/i);
+  };
+
+  it("never says sets, and shows duration", () => {
+    goFinish();
+    expect(screen.queryByText(/sets? logged/i)).toBeNull();
+    expect(screen.getByText(/elapsed/i)).toBeTruthy();
+  });
+
+  it("blocks saving an implausible pace and lets the user correct it", () => {
+    goFinish();
+    fireEvent.change(screen.getByLabelText("Distance"), { target: { value: "3.1" } });
+    fireEvent.change(screen.getByLabelText(/duration/i), { target: { value: "1" } });
+    click(/save workout/i);
+    expect(screen.getByText(/pace looks off/i)).toBeTruthy();
+    expect(finishWorkout).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(/duration/i), { target: { value: "27" } });
+    click(/save workout/i);
+    expect(finishWorkout).toHaveBeenCalledTimes(1);
+    expect((finishWorkout.mock.calls[0] as unknown as [{ distanceKm: number }])[0].distanceKm).toBeCloseTo(4.989, 3);
+  });
+
+  it("strength finish shows total volume and vs last time", () => {
+    mount(strength, { lastVolume: { Bench: 700 } });
+    click(/done set/i);
+    click(/skip rest/i);
+    click(/skip exercise/i);
+    click(/skip exercise/i);
+    expect(screen.getByText(/total volume 800 lb/i)).toBeTruthy();
+    expect(screen.getByText(/\+100 lb vs last time/)).toBeTruthy();
+  });
+});

@@ -17,6 +17,7 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
   const names = (w.structure?.exercises ?? []).map((e) => e.name);
   const lastWeights: Record<string, number> = {};
   const lastTime: Record<string, string> = {};
+  const lastVolume: Record<string, number> = {};
   if (names.length) {
     const { data } = await supabase
       .from("workout_sets")
@@ -32,6 +33,7 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
     }
     for (const [ex, wid] of lastSession) {
       const sets = (data ?? []).filter((r) => r.exercise === ex && r.workout_id === wid).sort((a, b) => a.set_number - b.set_number);
+      lastVolume[ex] = sets.reduce((a, r) => a + (r.weight_lb !== null && r.reps !== null ? Number(r.weight_lb) * r.reps : 0), 0);
       lastTime[ex] = sets.map((r) => `${r.weight_lb !== null ? `${Number(r.weight_lb)} × ` : ""}${r.reps ?? "-"}`).join(", ");
     }
   }
@@ -49,6 +51,21 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
         }
       : null;
 
+  // Previous completed session of the same sport, for the "vs last time" line on endurance finishes.
+  let lastEndurance: { date: string; km: number | null; minutes: number | null } | null = null;
+  if (["run", "bike", "swim", "hyrox"].includes(w.sport)) {
+    const { data: prev } = await supabase
+      .from("workouts")
+      .select("workout_date,actual_distance_km,actual_duration_min")
+      .eq("status", "completed")
+      .eq("sport", w.sport)
+      .neq("id", id)
+      .order("workout_date", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ workout_date: string; actual_distance_km: number | null; actual_duration_min: number | null }>();
+    if (prev) lastEndurance = { date: prev.workout_date, km: prev.actual_distance_km !== null ? Number(prev.actual_distance_km) : null, minutes: prev.actual_duration_min };
+  }
+
   // HYROX blocks show numeric targets from the next HYROX race that has a goal time.
   let targets: Record<string, number> = {};
   let targetRace: string | null = null;
@@ -62,5 +79,5 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
     }
   }
 
-  return <AssistantLoader workout={w} lastWeights={lastWeights} lastTime={lastTime} serverResume={serverResume} targets={targets} targetRace={targetRace} />;
+  return <AssistantLoader workout={w} lastWeights={lastWeights} lastTime={lastTime} serverResume={serverResume} targets={targets} targetRace={targetRace} lastVolume={lastVolume} lastEndurance={lastEndurance} plannedDistanceKm={w.planned_distance_km !== null ? Number(w.planned_distance_km) : null} distanceUnit={w.distance_unit ?? "mi"} />;
 }
