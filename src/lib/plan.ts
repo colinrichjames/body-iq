@@ -253,7 +253,7 @@ function hyroxStations(ctx: Ctx): Draft {
     { name: "Warm-up", detail: "5 min row or ski easy, then dynamic mobility.", minutes: 10 },
     {
       name: "Round x3",
-      detail: `SkiErg ${round(500 * s, 50)} m, Sled push ${round(25 * s, 5)} m x2, Burpee broad jumps ${round(40 * s, 5)} m, Row ${round(500 * s, 50)} m, Farmers carry ${round(100 * s, 10)} m, Wall balls ${round(30 * s, 5)}. Rest 90 s between rounds.`,
+      detail: `SkiErg ${round(500 * s, 50)} m, Sled push ${round(25 * s, 5)} m x2, Burpee broad jumps ${round(40 * s, 5)} m, Row ${round(500 * s, 50)} m, Farmers carry ${round(100 * s, 10)} m, Wall balls ${round(30 * s, 5)}. Rest 60 s between rounds.`,
       minutes: 35,
     },
     { name: "Cool-down", detail: "Walk, then stretch hips and shoulders.", minutes: 5 },

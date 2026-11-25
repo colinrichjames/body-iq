@@ -27,6 +27,10 @@ describe("parseCircuit", () => {
     expect(c.exercises[1]).toMatchObject({ reps: 8, sets: 6, note: "heavy" });
     expect(c.exercises[5]).toMatchObject({ reps: 20, sets: 3 });
   });
+  it("reads the no-floor-space versions", () => {
+    const c = parseCircuit({ name: "Round x3", detail: "Dumbbell shoulder raises 15 reps, Standard burpees 10 reps. Rest 90 s between rounds." })!;
+    expect(c.exercises.map((e) => [e.name, e.reps, e.sets, e.unit ?? null])).toEqual([["Dumbbell shoulder raises", 15, 3, null], ["Standard burpees", 10, 3, null]]);
+  });
   it("ignores blocks that are not a Round list", () => {
     expect(parseCircuit({ name: "Warm-up", detail: "5 min easy" })).toBeNull();
   });

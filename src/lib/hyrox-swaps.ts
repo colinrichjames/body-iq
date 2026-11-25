@@ -68,10 +68,28 @@ export const STATIONS: Station[] = [
     why: "Squat into an overhead press, the same pattern. Use a light to moderate pair.",
     alts: ["Medicine ball squat throws to the floor", "Goblet squat to press", "Barbell thrusters, empty bar"],
   },
+  {
+    id: "farmers_carry",
+    hyrox: "Farmers carry",
+    test: /farmers?\s*carry/i,
+    gym: "Dumbbell shoulder raises",
+    amount: (m) => `${Math.max(10, r5(m / 5))} reps`,
+    why: "Needs no floor space. Shoulders, traps and grip under load: use dumbbells you could carry for a while, slow and strict, no swinging.",
+    alts: ["Dumbbell shrugs with a 2 s hold", "Heavy dumbbell hold in place, 30-45 s", "Dead hang from a bar"],
+  },
+  {
+    id: "burpee_broad_jumps",
+    hyrox: "Burpee broad jumps",
+    test: /burpee\s*broad\s*jumps?/i,
+    gym: "Standard burpees",
+    amount: (m) => `${Math.max(5, r5(m / 2.5))} reps`,
+    why: "Same full-body effort with no space needed. Chest to the floor, stand tall, jump at the top.",
+    alts: ["Burpees without the push-up", "Squat thrusts", "Mountain climbers, 40 s"],
+  },
 ];
 
 /** Stations that already work in a normal gym: no swap, listed so you know they stay. */
-export const GYM_READY = ["Burpee broad jumps", "Farmers carry (dumbbells or kettlebells)", "Rowing (machine) or air bike", "Runs (treadmill is fine)"];
+export const GYM_READY = ["Rowing (machine) or air bike", "Runs (treadmill is fine)"];
 
 const NUM = String.raw`(\d{1,3}(?:,\d{3})*|\d+)`;
 const toNum = (s: string) => Number(s.replace(/,/g, ""));
@@ -88,15 +106,21 @@ export function swapText(text: string): string {
 
 /** Swaps one block. Returns the same block when it has no special-equipment station. */
 export function swapBlock(b: Block): Block {
-  if (b.original) return b;
-  const st = STATIONS.find((s) => s.test.test(b.name));
+  // An already swapped block is re-derived from its original, so newer substitutions reach it too.
+  const src: Block = b.original ? { ...b, name: b.original.name, detail: b.original.detail } : b;
+  const { original: _keep, ...plain } = src;
+  void _keep;
+  const st = STATIONS.find((s) => s.test.test(src.name));
+  let next: Block = b;
   if (st) {
-    const m = b.detail.match(new RegExp(`${NUM}\\s*(?:m|reps?)?`, "i"));
+    const m = src.detail.match(new RegExp(`${NUM}\\s*(?:m|reps?)?`, "i"));
     const amount = m ? st.amount(toNum(m[1])) : "";
-    return { ...b, name: st.gym, detail: amount ? `${amount} (replaces ${st.hyrox}).` : `Replaces ${st.hyrox}.`, original: { name: b.name, detail: b.detail } };
+    next = { ...plain, name: st.gym, detail: amount ? `${amount} (replaces ${st.hyrox}).` : `Replaces ${st.hyrox}.`, original: { name: src.name, detail: src.detail } };
+  } else {
+    const detail = swapText(src.detail);
+    if (detail !== src.detail) next = { ...plain, detail, original: { name: src.name, detail: src.detail } };
   }
-  const detail = swapText(b.detail);
-  return detail === b.detail ? b : { ...b, detail, original: { name: b.name, detail: b.detail } };
+  return JSON.stringify(next) === JSON.stringify(b) ? b : next;
 }
 
 export const revertBlock = (b: Block): Block => {
@@ -106,6 +130,11 @@ export const revertBlock = (b: Block): Block => {
 };
 
 export const isSwapped = (s: WorkoutStructure | null | undefined) => !!s?.blocks?.some((b) => b.original);
+
+/** True when the session is swapped but a newer substitution would change it (e.g. farmers carry was added later). */
+export function isStale(s: WorkoutStructure | null | undefined): boolean {
+  return !!s && isSwapped(s) && JSON.stringify(swapStructure(s)) !== JSON.stringify(s);
+}
 
 export function swapStructure(s: WorkoutStructure): WorkoutStructure {
   return s.blocks ? { ...s, blocks: s.blocks.map(swapBlock) } : s;
