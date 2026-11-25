@@ -4,7 +4,11 @@ import { diffDays, formatDay } from "@/lib/dates";
 import { getToday } from "@/lib/today";
 import type { SyncRun } from "@/lib/types";
 import { btnGhost, btnPrimary, card, field } from "@/components/ui";
-import { connectGarmin, disconnectGarmin } from "./actions";
+import { connectGarmin, disconnectGarmin, syncGarmin } from "./actions";
+
+export const maxDuration = 60;
+
+type Endpoint = { name: string; status: number | string; count?: number };
 
 const KEY_PAGE = "https://connect.garmin.com/app/settings/personalApiToken";
 
@@ -66,6 +70,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
   const daysLeft = conn ? diffDays(today, conn.expires_on) : null;
   const { data } = await supabase.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(1).returns<SyncRun[]>();
   const last = data?.[0] ?? null;
+  const endpoints = (last?.detail?.endpoints ?? []) as Endpoint[];
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -92,11 +97,25 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
               ? `Expired ${formatDay(conn.expires_on, { weekday: false, year: true })}. Create a new key and paste it below.`
               : `Expires ${formatDay(conn.expires_on, { weekday: false, year: true })} (${daysLeft} days).`}
           </p>
-          <form action={disconnectGarmin} className="mt-3">
-            <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
-              Disconnect and delete key
-            </button>
-          </form>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <form action={syncGarmin}>
+              <input type="hidden" name="days" value="7" />
+              <button type="submit" className={`${btnPrimary} px-3 py-2 text-sm`}>
+                Sync now (7 days)
+              </button>
+            </form>
+            <form action={syncGarmin}>
+              <input type="hidden" name="days" value="30" />
+              <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
+                Load 30 days
+              </button>
+            </form>
+            <form action={disconnectGarmin}>
+              <button type="submit" className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
+                Disconnect
+              </button>
+            </form>
+          </div>
         </section>
       ) : null}
 
@@ -131,9 +150,25 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
         <p className="mt-1">
           {last
             ? `Last sync ${last.status}: ${new Date(last.finished_at ?? last.started_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${last.error ? ` (${last.error})` : ""}`
-            : "No syncs yet. Once your key is saved, the sync itself is the next thing to be built."}
+            : "No syncs yet. Save your key, then tap Sync now."}
         </p>
       </section>
+
+      {endpoints.length > 0 && (
+        <section className={`${card} mt-5 text-sm`}>
+          <p className="text-zinc-400">What Garmin returned on the last sync</p>
+          <ul className="mt-2 divide-y divide-zinc-900">
+            {endpoints.map((e) => (
+              <li key={e.name} className="flex justify-between py-1.5">
+                <span>{e.name}</span>
+                <span className={`tabular-nums ${e.status === 200 ? "text-zinc-400" : "text-amber-400"}`}>
+                  {e.status === 200 ? `${e.count ?? 0} items` : `HTTP ${e.status}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <h2 className="mt-8 text-sm text-zinc-400">How to get the key</h2>
       <ol className="mt-3 space-y-4">
