@@ -71,13 +71,30 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
   const blocks = workout.structure?.blocks ?? [];
   const mode: "sets" | "blocks" | "timer" = steps.length ? "sets" : blocks.length ? "blocks" : "timer";
 
-  const [startedAt] = useState(() => Date.now());
+  const draftKey = `bodyiq-draft-${workout.id}`;
+  const [startedAt] = useState(() => {
+    try {
+      const d = JSON.parse(localStorage.getItem(`bodyiq-draft-${workout.id}`) ?? "null");
+      if (d && typeof d.startedAt === "number") return d.startedAt as number;
+    } catch {
+      // storage unavailable
+    }
+    return Date.now();
+  });
   const [now, setNow] = useState(() => Date.now());
-  const [stepIndex, setStepIndex] = useState(0);
+  const saved = (() => {
+    try {
+      const d = JSON.parse(localStorage.getItem(`bodyiq-draft-${workout.id}`) ?? "null");
+      return d && Array.isArray(d.logs) ? (d as { logs: SetLog[]; stepIndex: number; blockIndex: number }) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const [stepIndex, setStepIndex] = useState(() => Math.min(saved?.stepIndex ?? 0, Math.max(0, steps.length - 1)));
   const [restEnd, setRestEnd] = useState<number | null>(null);
-  const [blockIndex, setBlockIndex] = useState(0);
+  const [blockIndex, setBlockIndex] = useState(() => Math.min(saved?.blockIndex ?? 0, Math.max(0, blocks.length - 1)));
   const [blockStart, setBlockStart] = useState(() => Date.now());
-  const [logs, setLogs] = useState<SetLog[]>([]);
+  const [logs, setLogs] = useState<SetLog[]>(() => saved?.logs ?? []);
   const [finished, setFinished] = useState(false);
   const prefill = (i: number, done: SetLog[]) => {
     const st = steps[i];
@@ -121,6 +138,23 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
   }, []);
 
   const step = steps[stepIndex];
+  const plates = (() => {
+    const w = Number(weight);
+    if (!step || !Number.isFinite(w) || w <= 45 || !/barbell|squat|deadlift|bench|press|rdl|romanian/i.test(step.exercise) || /dumbbell|goblet/i.test(step.exercise)) return null;
+    let side = (w - 45) / 2;
+    const out: number[] = [];
+    for (const p of [45, 35, 25, 10, 5, 2.5]) while (side >= p - 1e-9) { out.push(p); side -= p; }
+    return side > 0.01 ? null : out;
+  })();
+
+  // Never lose a session: keep progress on the phone until it is saved.
+  useEffect(() => {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ startedAt, logs, stepIndex, blockIndex }));
+    } catch {
+      // storage unavailable
+    }
+  }, [draftKey, startedAt, logs, stepIndex, blockIndex]);
 
   const elapsedSec = (now - startedAt) / 1000;
   const restLeft = restEnd ? Math.max(0, Math.ceil((restEnd - now) / 1000)) : 0;
@@ -183,12 +217,18 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
       setSaving(false);
       return;
     }
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+      // storage unavailable
+    }
     router.push(`/workouts/${workout.id}`);
     router.refresh();
   }
 
   function quit() {
-    if (logs.length === 0 || confirm("Leave without saving? Logged sets will be lost.")) router.push(`/workouts/${workout.id}`);
+    // Progress stays on this phone, so coming back resumes where you left off.
+    router.push(`/workouts/${workout.id}`);
   }
 
   // ----------------------------------------------------------------- finish
@@ -279,6 +319,11 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
               Weight (lb)
               <input value={weight} onChange={(e) => setWeight(e.target.value)} type="number" inputMode="decimal" step="2.5" className={`${field} mt-1 text-2xl`} />
             </label>
+            {plates && (
+              <p className="col-span-2 text-sm text-zinc-500">
+                Barbell (45 lb bar): {plates.length ? `${plates.join(" + ")} per side` : "bar only"}
+              </p>
+            )}
           </div>
         </div>
         {nextUp && (

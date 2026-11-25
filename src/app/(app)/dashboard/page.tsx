@@ -7,6 +7,9 @@ import { computeInsights } from "@/lib/insights";
 import { currentPhase, raceLabel } from "@/lib/plan";
 import { getToday } from "@/lib/today";
 import { computeReadiness } from "@/lib/readiness";
+import { fuelForDay } from "@/lib/fuel";
+import { classify } from "@/lib/intensity";
+import { swapHardSession } from "../workouts/actions";
 import { targetsFor } from "@/lib/targets";
 import type { BodyScan, DailyHealth, NutritionDay, Profile, Race, SyncRun, Workout } from "@/lib/types";
 
@@ -22,7 +25,8 @@ function delta(latest: number | null, previous: number | null, digits = 1) {
   return Number((latest - previous).toFixed(digits));
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
+  const { notice } = await searchParams;
   const { supabase, userId, email } = await requireUser();
   const today = await getToday();
 
@@ -44,6 +48,10 @@ export default async function DashboardPage() {
   const lastSync = syncRes.data?.[0] ?? null;
   const todayFuel = (nutritionRes.data ?? []).find((d) => d.day === today) ?? null;
   const fuelTargets = targetsFor(today, workouts, profileRes.data ?? null);
+  const weightKg = latest?.weight_lb ? latest.weight_lb * 0.45359237 : null;
+  const dayFuel = fuelForDay(today, workouts, weightKg, nextRace?.race_date ?? null, nextRace?.race_type ?? null);
+  const hardToday = todays.find((w) => w.status === "planned" && classify(w).level === "hard") ?? null;
+  const swapNeeded = readiness && readiness.status !== "green" && hardToday ? hardToday : null;
   const insights = computeInsights({
     today,
     scans,
@@ -67,6 +75,23 @@ export default async function DashboardPage() {
         </form>
       </header>
 
+      {notice && <p className="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</p>}
+
+      {swapNeeded && readiness && (
+        <section className="mt-6 rounded-2xl border border-amber-900 bg-amber-950/30 p-5 text-sm">
+          <p className="font-medium text-amber-300">
+            {readiness.status === "red" ? "You're under-recovered" : "Recovery is mixed"}, and today is a hard session.
+          </p>
+          <p className="mt-1 text-zinc-300">&quot;{swapNeeded.title}&quot; can move to the next day without a hard session.</p>
+          <form action={swapHardSession} className="mt-3">
+            <input type="hidden" name="id" value={swapNeeded.id} />
+            <button type="submit" className="rounded-xl bg-amber-400 px-4 py-2 font-medium text-zinc-950 active:bg-amber-300">
+              Move it
+            </button>
+          </form>
+        </section>
+      )}
+
       <section className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
         <h2 className="text-sm text-zinc-400">Today &middot; {formatDay(today)}</h2>
         {todays.length === 0 ? (
@@ -86,13 +111,16 @@ export default async function DashboardPage() {
       </section>
 
       <section className="mt-4 rounded-2xl border border-zinc-800 p-5">
-        <h2 className="text-sm text-zinc-400">Fuel today</h2>
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm text-zinc-400">Fuel today</h2>
+          <span className="text-xs text-emerald-400">{dayFuel.label}</span>
+        </div>
         {todayFuel && (todayFuel.calories ?? 0) > 0 ? (
           <p className="mt-2 tabular-nums">
             <span className="text-2xl font-semibold">{Math.round(todayFuel.calories ?? 0)}</span>
             <span className="text-zinc-500"> / {fuelTargets.calories ?? "--"} cal</span>
             <span className="ml-3 text-sm text-zinc-400">
-              P {Math.round(todayFuel.protein_g ?? 0)}/{fuelTargets.protein ?? "--"}
+              P {Math.round(todayFuel.protein_g ?? 0)}/{fuelTargets.protein ?? "--"} &middot; C {Math.round(todayFuel.carbs_g ?? 0)}/{fuelTargets.carbs ?? "--"}
             </span>
           </p>
         ) : (
@@ -103,6 +131,12 @@ export default async function DashboardPage() {
             </Link>
           </p>
         )}
+        <p className="mt-3 text-xs text-zinc-500">
+          Carbs scale with the day&apos;s work: {dayFuel.carbsPerKg[0]}-{dayFuel.carbsPerKg[1]} g/kg
+          {dayFuel.carbsG ? ` (about ${dayFuel.carbsG[0]}-${dayFuel.carbsG[1]} g)` : " (log a body scan to see grams)"}, protein {dayFuel.proteinPerKg[0]}-{dayFuel.proteinPerKg[1]} g/kg
+          {dayFuel.proteinG ? ` (${dayFuel.proteinG[0]}-${dayFuel.proteinG[1]} g)` : ""}. That is a performance range. If you&apos;re cutting, your own targets above take priority; use the day type to shift carbs up or down.
+        </p>
+        {dayFuel.note && <p className="mt-2 text-xs text-zinc-400">{dayFuel.note}</p>}
       </section>
 
       <section className="mt-4 rounded-2xl border border-zinc-800 p-5">
@@ -228,6 +262,16 @@ export default async function DashboardPage() {
           <p className="mt-3 text-sm text-zinc-500">No scans yet. Add your first InBody result to start tracking.</p>
         )}
       </section>
+
+      <p className="mt-6 text-center text-xs text-zinc-600">
+        <a href="/export" className="underline">
+          Export all my data (JSON)
+        </a>
+        {" · "}
+        <a href="/export?type=workouts" className="underline">
+          Workouts (CSV)
+        </a>
+      </p>
     </main>
   );
 }

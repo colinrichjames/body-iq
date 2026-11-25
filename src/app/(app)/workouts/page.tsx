@@ -2,7 +2,10 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { addDays, formatDay, isIsoDate, startOfWeek } from "@/lib/dates";
 import { getToday } from "@/lib/today";
+import { computeLoad } from "@/lib/load";
+import { stackingWarnings } from "@/lib/stacking";
 import { weekSummary } from "@/lib/week";
+import { realignPlan } from "../races/actions";
 import type { Workout } from "@/lib/types";
 import { btnPrimary } from "@/components/ui";
 
@@ -16,23 +19,36 @@ const SPORT_LABEL: Record<string, string> = {
   other: "Other",
 };
 
-export default async function WorkoutsPage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
-  const { d } = await searchParams;
+export default async function WorkoutsPage({ searchParams }: { searchParams: Promise<{ d?: string; notice?: string }> }) {
+  const { d, notice } = await searchParams;
   const { supabase } = await requireUser();
   const today = await getToday();
   const anchor = d && isIsoDate(d) ? d : today;
   const weekStart = startOfWeek(anchor);
   const weekEnd = addDays(weekStart, 6);
 
+  const from = [addDays(weekStart, -1), addDays(today, -89)].sort()[0];
   const { data } = await supabase
     .from("workouts")
     .select("*")
-    .gte("workout_date", weekStart)
-    .lte("workout_date", weekEnd)
+    .gte("workout_date", from)
+    .lte("workout_date", addDays(weekEnd, 1))
     .order("workout_date")
     .order("created_at")
     .returns<Workout[]>();
-  const workouts = data ?? [];
+  const history = data ?? [];
+  const workouts = history.filter((w) => w.workout_date >= weekStart && w.workout_date <= weekEnd);
+  const load = computeLoad(history, today, weekStart, workouts);
+  const warnings = stackingWarnings(history.filter((w) => w.workout_date >= addDays(weekStart, -1) && w.workout_date <= addDays(weekEnd, 1))).filter(
+    (x) => x.date >= weekStart && x.date <= weekEnd,
+  );
+  const missedByRace = new Map<string, number>();
+  for (const w of history) {
+    if (w.status === "planned" && w.race_id && w.workout_date < today && w.workout_date >= addDays(today, -13)) {
+      missedByRace.set(w.race_id, (missedByRace.get(w.race_id) ?? 0) + 1);
+    }
+  }
+  const realign = [...missedByRace.entries()].find(([, n]) => n >= 3) ?? null;
   const summary = weekSummary(workouts);
   const hm = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -57,6 +73,71 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
           Next &rarr;
         </Link>
       </div>
+
+      {notice && <p className="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</p>}
+
+      {realign && (
+        <section className="mt-4 rounded-2xl border border-amber-900 bg-amber-950/30 p-4 text-sm">
+          <p className="font-medium text-amber-300">You&apos;ve missed {realign[1]} planned sessions in the last two weeks.</p>
+          <p className="mt-1 text-zinc-400">Don&apos;t try to cram them in. Pick how to move on:</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <form action={realignPlan}>
+              <input type="hidden" name="id" value={realign[0]} />
+              <input type="hidden" name="mode" value="skip" />
+              <button type="submit" className="rounded-xl border border-zinc-700 px-3 py-2 text-zinc-200 active:bg-zinc-800">
+                Skip missed sessions
+              </button>
+            </form>
+            <form action={realignPlan}>
+              <input type="hidden" name="id" value={realign[0]} />
+              <input type="hidden" name="mode" value="rebuild" />
+              <button type="submit" className="rounded-xl bg-amber-400 px-3 py-2 font-medium text-zinc-950 active:bg-amber-300">
+                Rebuild to race date
+              </button>
+            </form>
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">Rebuilding keeps everything you completed and shows what changed.</p>
+        </section>
+      )}
+
+      <section className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <h2 className="text-sm text-zinc-400">Training load</h2>
+        {load.status === "insufficient" ? (
+          <p className="mt-2 text-sm text-zinc-500">Log a few more completed sessions (with RPE) to see fitness and fatigue. It needs about two weeks of history.</p>
+        ) : (
+          <>
+            <div className="mt-3 grid grid-cols-3 gap-3 tabular-nums">
+              <div>
+                <p className="text-xs text-zinc-500">Fitness</p>
+                <p className="text-xl font-semibold">{load.ctl}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Fatigue</p>
+                <p className="text-xl font-semibold">{load.atl}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Form</p>
+                <p className={`text-xl font-semibold ${load.tsb < -15 ? "text-amber-400" : load.tsb > 10 ? "text-emerald-400" : ""}`}>{load.tsb > 0 ? "+" : ""}{load.tsb}</p>
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-zinc-300">
+              {load.status === "fatigued" && "Fatigue is well above fitness. Keep the next hard day honest, or take it easy."}
+              {load.status === "building" && "Fatigue is running ahead of fitness. Normal in a build; watch recovery."}
+              {load.status === "fresh" && "You're fresh. Good window for a quality session or a race."}
+              {load.status === "steady" && "Fitness and fatigue are in balance."}
+            </p>
+          </>
+        )}
+        <p className="mt-2 text-xs text-zinc-500">
+          This week: load {load.weekLoad}, {load.weekHardDays} hard day{load.weekHardDays === 1 ? "" : "s"}. Load is RPE x minutes, a simple estimate (not TrainingPeaks TSS).
+        </p>
+      </section>
+
+      {warnings.map((w, i) => (
+        <p key={i} className="mt-3 rounded-xl border border-amber-900 bg-amber-950/30 px-3 py-2 text-sm text-amber-300">
+          {w.message}
+        </p>
+      ))}
 
       {summary.plannedMin > 0 && (
         <section className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">

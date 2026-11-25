@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import type { Workout } from "@/lib/types";
-import { Assistant } from "./assistant";
+import { AssistantLoader } from "./assistant-loader";
 
 export default async function StartWorkoutPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,5 +26,5 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
     }
   }
 
-  return <Assistant workout={w} lastWeights={lastWeights} />;
+  return <AssistantLoader workout={w} lastWeights={lastWeights} />;
 }

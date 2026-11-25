@@ -4,15 +4,19 @@ import { requireUser } from "@/lib/auth";
 import { formatDay } from "@/lib/dates";
 import type { Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, card } from "@/components/ui";
-import { deleteWorkout, setStatus } from "../actions";
+import { sessionFuel } from "@/lib/fuel";
+import { field } from "@/components/ui";
+import { deleteWorkout, moveWorkout, setStatus } from "../actions";
 
-export default async function WorkoutPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function WorkoutPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
+  const { error } = await searchParams;
   const { supabase } = await requireUser();
   const { data: w } = await supabase.from("workouts").select("*").eq("id", id).maybeSingle<Workout>();
   if (!w) notFound();
 
   const s = w.structure;
+  const fuel = sessionFuel(w);
   const hasGuide = !!(s?.exercises?.length || s?.blocks?.length);
 
   return (
@@ -63,6 +67,15 @@ export default async function WorkoutPage({ params }: { params: Promise<{ id: st
         </section>
       )}
 
+      {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
+
+      {fuel && (
+        <section className={`${card} mt-5 text-sm`}>
+          <h2 className="text-zinc-400">Fuel this session</h2>
+          <p className="mt-1 text-zinc-300">{fuel.text}</p>
+        </section>
+      )}
+
       {w.status === "completed" && (
         <section className={`${card} mt-5 text-sm`}>
           <p className="font-medium text-emerald-400">Completed</p>
@@ -108,6 +121,13 @@ export default async function WorkoutPage({ params }: { params: Promise<{ id: st
               </button>
             </form>
           )}
+          <form action={moveWorkout} className="flex w-full items-center gap-2">
+            <input type="hidden" name="id" value={w.id} />
+            <input name="date" type="date" defaultValue={w.workout_date} className={`${field} !w-auto flex-1`} />
+            <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
+              Move
+            </button>
+          </form>
           <form action={deleteWorkout}>
             <input type="hidden" name="id" value={w.id} />
             <button type="submit" className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
