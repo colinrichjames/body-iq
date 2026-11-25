@@ -111,7 +111,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const [weight, setWeight] = useState(() => prefill(0, []).weight);
   // Summary fields (notes, RPE, minutes, HR, power) are kept on this phone too, so a refresh doesn't lose what you typed.
   const sumKey = `${draftKey}-summary`;
-  const [sum0] = useState<Partial<Record<"notes" | "rpe" | "minutes" | "avgHr" | "avgPower", string>>>(() => {
+  const [sum0] = useState<Partial<Record<"notes" | "rpe" | "minutes" | "avgHr" | "avgPower" | "fuelCarbs" | "fluidMl" | "sodiumMg", string>>>(() => {
     try {
       return JSON.parse(localStorage.getItem(sumKey) ?? "{}") ?? {};
     } catch {
@@ -126,14 +126,17 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const [avgPower, setAvgPower] = useState(sum0.avgPower ?? "");
   const endurance = ["run", "bike", "swim", "hyrox"].includes(workout.sport);
   const [notes, setNotes] = useState(sum0.notes ?? "");
+  const [fuelCarbs, setFuelCarbs] = useState(sum0.fuelCarbs ?? "");
+  const [fluidMl, setFluidMl] = useState(sum0.fluidMl ?? "");
+  const [sodiumMg, setSodiumMg] = useState(sum0.sodiumMg ?? "");
   const [minutes, setMinutes] = useState(sum0.minutes ?? "");
   useEffect(() => {
     try {
-      if (notes || rpe || minutes || avgHr || avgPower) localStorage.setItem(sumKey, JSON.stringify({ notes, rpe, minutes, avgHr, avgPower }));
+      if (notes || rpe || minutes || avgHr || avgPower || fuelCarbs || fluidMl || sodiumMg) localStorage.setItem(sumKey, JSON.stringify({ notes, rpe, minutes, avgHr, avgPower, fuelCarbs, fluidMl, sodiumMg }));
     } catch {
       // storage unavailable
     }
-  }, [sumKey, notes, rpe, minutes, avgHr, avgPower]);
+  }, [sumKey, notes, rpe, minutes, avgHr, avgPower, fuelCarbs, fluidMl, sodiumMg]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const buzzed = useRef(false);
@@ -382,6 +385,9 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
       distanceUnit: unit,
       avgHr: avgHr === "" ? null : Number(avgHr),
       avgPower: avgPower === "" ? null : Number(avgPower),
+      fuelCarbsG: fuelCarbs === "" ? null : Number(fuelCarbs),
+      fluidMl: fluidMl === "" ? null : Number(fluidMl),
+      sodiumMg: sodiumMg === "" ? null : Number(sodiumMg),
       blocks: blockLogs,
     });
     if (res.error) {
@@ -513,6 +519,24 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
               ))}
             </select>
           </label>
+          <details className="rounded-xl border border-zinc-800 p-3" open={fuelCarbs !== "" || fluidMl !== "" || sodiumMg !== ""}>
+            <summary className="cursor-pointer text-sm text-zinc-300">Fuel and fluids during the session (optional)</summary>
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <label className="text-sm text-zinc-400">
+                Carbs (g)
+                <input value={fuelCarbs} onChange={(e) => setFuelCarbs(e.target.value)} type="number" inputMode="decimal" min="0" className={`${field} mt-1`} />
+              </label>
+              <label className="text-sm text-zinc-400">
+                Fluid (ml)
+                <input value={fluidMl} onChange={(e) => setFluidMl(e.target.value)} type="number" inputMode="numeric" min="0" className={`${field} mt-1`} />
+              </label>
+              <label className="text-sm text-zinc-400">
+                Sodium (mg)
+                <input value={sodiumMg} onChange={(e) => setSodiumMg(e.target.value)} type="number" inputMode="numeric" min="0" className={`${field} mt-1`} />
+              </label>
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">For sessions of 75 minutes or more, the finished workout compares this with the per-hour ranges.</p>
+          </details>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Notes" aria-label="Session notes" className={field} />
           {error && <p className="rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
           <button onClick={save} disabled={saving} className={`${btnPrimary} w-full`}>

@@ -105,3 +105,17 @@ export async function deleteFoodEntry(formData: FormData) {
   }
   redirect(withUndo("/nutrition/log", undo, label));
 }
+
+/** Add (or take away, with a negative amount) water for a day. Never below zero. */
+export async function addWater(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const day = String(formData.get("day") ?? "");
+  const delta = Math.round(Number(formData.get("ml")));
+  if (!isIsoDate(day) || !Number.isFinite(delta) || delta === 0 || Math.abs(delta) > 5000) redirect("/nutrition/log");
+  const { data } = await supabase.from("hydration_days").select("ml").eq("day", day).maybeSingle<{ ml: number }>();
+  const next = Math.min(20000, Math.max(0, (data?.ml ?? 0) + delta));
+  const { error } = await supabase.from("hydration_days").upsert({ user_id: userId, day, ml: next, updated_at: new Date().toISOString() }, { onConflict: "user_id,day" });
+  if (error) redirect(`/nutrition/log?d=${day}&error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/", "layout");
+  redirect(`/nutrition/log?d=${day}`);
+}

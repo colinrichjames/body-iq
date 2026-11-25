@@ -6,7 +6,8 @@ import { getToday } from "@/lib/today";
 import { isTrainingDay, remainingText, targetsFor } from "@/lib/targets";
 import { card } from "@/components/ui";
 import type { Profile, Workout } from "@/lib/types";
-import { deleteFoodEntry } from "./actions";
+import { addWater, deleteFoodEntry } from "./actions";
+import { hydrationTarget } from "@/lib/fuel";
 import { FoodAdder, type Recent } from "./food-adder";
 
 type Entry = {
@@ -32,11 +33,13 @@ export default async function FoodLogPage({ searchParams }: { searchParams: Prom
   const today = await getToday();
   const day = d && isIsoDate(d) ? d : today;
 
-  const [{ data: entries }, { data: recentRows }, { data: profile }, { data: wk }] = await Promise.all([
+  const [{ data: entries }, { data: recentRows }, { data: profile }, { data: wk }, { data: water }, { data: scan }] = await Promise.all([
     supabase.from("food_entries").select("*").eq("day", day).order("created_at").returns<Entry[]>(),
     supabase.from("food_entries").select("name,brand,calories,protein_g,carbs_g,fat_g").gte("day", addDays(today, -30)).order("created_at", { ascending: false }).limit(150),
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
     supabase.from("workouts").select("*").eq("workout_date", day).returns<Workout[]>(),
+    supabase.from("hydration_days").select("ml").eq("day", day).maybeSingle<{ ml: number }>(),
+    supabase.from("body_scans").select("weight_lb").not("weight_lb", "is", null).order("scanned_at", { ascending: false }).limit(1).maybeSingle<{ weight_lb: number }>(),
   ]);
   const list = entries ?? [];
 
@@ -53,6 +56,10 @@ export default async function FoodLogPage({ searchParams }: { searchParams: Prom
   const total = (k: "calories" | "protein_g" | "carbs_g" | "fat_g") => list.reduce((a, e) => a + Number(e[k]), 0);
   const t = targetsFor(day, wk ?? [], profile ?? null);
   const trainingDay = isTrainingDay(day, wk ?? []);
+  const waterMl = water?.ml ?? 0;
+  const trainingMin = (wk ?? []).filter((x) => x.status !== "skipped" && x.sport !== "mobility").reduce((a, x) => a + (x.actual_duration_min ?? x.planned_duration_min ?? 0), 0);
+  const waterTarget = hydrationTarget(scan?.weight_lb ? Number(scan.weight_lb) * 0.45359237 : null, trainingMin);
+  const sessionFluid = (wk ?? []).reduce((a, x) => a + (x.fluid_ml ?? 0), 0);
   const rows = [
     { label: "Calories", v: total("calories"), target: t.calories, unit: "" },
     { label: "Protein", v: total("protein_g"), target: t.protein, unit: " g" },
@@ -93,6 +100,33 @@ export default async function FoodLogPage({ searchParams }: { searchParams: Prom
           ))}
         </div>
         <p className="mt-3 text-xs text-zinc-500">{trainingDay ? "Training day targets apply." : "Rest day targets apply."}</p>
+      </section>
+
+      <section className={`${card} mt-4`}>
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm text-zinc-400">Water</h2>
+          <p className="text-sm tabular-nums text-zinc-300">
+            {(waterMl / 1000).toFixed(2).replace(/0$/, "")} L <span className="text-zinc-500">of {(waterTarget / 1000).toFixed(2).replace(/0$/, "")} L</span>
+          </p>
+        </div>
+        <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800" role="progressbar" aria-label="Water today" aria-valuemin={0} aria-valuemax={waterTarget} aria-valuenow={waterMl}>
+          <div className="h-full rounded-full bg-sky-400" style={{ width: `${Math.min(100, Math.round((waterMl / waterTarget) * 100))}%` }} />
+        </div>
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {[-250, 250, 500, 750].map((ml) => (
+            <form key={ml} action={addWater}>
+              <input type="hidden" name="day" value={day} />
+              <input type="hidden" name="ml" value={ml} />
+              <button type="submit" disabled={ml < 0 && waterMl === 0} className="w-full rounded-lg border border-zinc-700 py-2 text-sm text-zinc-200 active:bg-zinc-800 disabled:opacity-30" aria-label={ml < 0 ? "Remove 250 millilitres" : `Add ${ml} millilitres`}>
+                {ml < 0 ? "-250" : `+${ml}`}
+              </button>
+            </form>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-zinc-500">
+          Target is about 35 ml per kg of body weight{trainingMin > 0 ? ` plus 500 ml per hour of training (${Math.round(trainingMin)} min today)` : ""}.
+          {sessionFluid > 0 ? ` You logged ${sessionFluid} ml during training; count it here if you want it in the total.` : ""} Amounts in ml; a typical bottle is 500 to 750.
+        </p>
       </section>
 
       <FoodAdder key={day + list.length} day={day} recents={recents} />

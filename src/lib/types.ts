@@ -101,6 +101,9 @@ export type Workout = {
   activity_id: string | null;
   rpe: number | null;
   notes: string | null;
+  fuel_carbs_g: number | null;
+  fluid_ml: number | null;
+  sodium_mg: number | null;
   completed_at: string | null;
   created_at: string;
 };

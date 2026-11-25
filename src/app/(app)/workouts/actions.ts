@@ -152,6 +152,15 @@ function cleanBlocks(blocks: BlockLog[] | undefined): BlockLog[] | null {
   }));
 }
 
+/** In-session intake, validated to the database limits. Blank or invalid means not logged. */
+function fuelFields(carbs: unknown, fluid: unknown, sodium: unknown) {
+  const n = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
+  const c = n(carbs, 1000);
+  const f = n(fluid, 10000);
+  const so = n(sodium, 20000);
+  return { fuel_carbs_g: c === null ? null : Math.round(c * 10) / 10, fluid_ml: f === null ? null : Math.round(f), sodium_mg: so === null ? null : Math.round(so) };
+}
+
 export async function finishWorkout(input: {
   id: string;
   sets: SetLog[];
@@ -162,6 +171,9 @@ export async function finishWorkout(input: {
   distanceUnit?: DistUnit;
   avgHr?: number | null;
   avgPower?: number | null;
+  fuelCarbsG?: number | null;
+  fluidMl?: number | null;
+  sodiumMg?: number | null;
   blocks?: BlockLog[];
 }): Promise<{ error: string | null; message?: string }> {
   const { supabase, userId } = await requireUser();
@@ -188,6 +200,7 @@ export async function finishWorkout(input: {
       actual_distance_km: km,
       avg_hr: input.avgHr && input.avgHr >= 30 && input.avgHr <= 250 ? Math.round(input.avgHr) : null,
       avg_power: input.avgPower && input.avgPower >= 0 && input.avgPower <= 3000 ? Math.round(input.avgPower) : null,
+      ...fuelFields(input.fuelCarbsG, input.fluidMl, input.sodiumMg),
     })
     .eq("id", input.id);
   if (error) return { error: error.message };
@@ -492,4 +505,19 @@ export async function setGymSwaps(formData: FormData) {
   revalidatePath("/", "layout");
   const what = on ? "Switched to gym versions" : "Back to the Hyrox stations";
   redirect(flash(`/workouts/${id}`, changed ? `${what} for ${changed} session${changed === 1 ? "" : "s"}.` : "Nothing to change."));
+}
+
+/** Log (or fix) what you took in during a session, after the fact. Blank fields clear that value. */
+export async function logSessionFuel(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const val = (k: string) => {
+    const t = String(formData.get(k) ?? "").trim();
+    return t === "" ? null : Number(t);
+  };
+  const fields = fuelFields(val("fuel_carbs_g"), val("fluid_ml"), val("sodium_mg"));
+  const { error } = await supabase.from("workouts").update(fields).eq("id", id);
+  if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/", "layout");
+  redirect(flash(`/workouts/${id}`, "Fuel and fluids saved."));
 }
