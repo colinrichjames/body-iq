@@ -61,6 +61,9 @@ export default async function RacePage({
         {days >= 0 ? `${days} days to go${phase ? `, ${phase} phase` : ""}.` : "Race complete."}
         {race.goal_time_sec ? ` Goal ${fmtTime(race.goal_time_sec)}.` : ""}
       </p>
+      <Link href={`/races/${race.id}/edit`} className="mt-3 inline-block rounded-xl border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 active:bg-zinc-800">
+        Edit race
+      </Link>
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
 
       {hyrox && (
