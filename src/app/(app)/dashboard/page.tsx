@@ -132,7 +132,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               <li key={w.id}>
                 <Link href={`/workouts/${w.id}`} className="flex items-center justify-between gap-3">
                   <span className={w.status === "completed" ? "text-zinc-500 line-through" : "font-medium"}>{w.title}</span>
-                  <span className="text-sm text-emerald-400">{w.status === "completed" ? "Done" : "Open"}</span>
+                  <span className={`text-sm ${w.status === "in_progress" ? "text-amber-400" : "text-emerald-400"}`}>{w.status === "completed" ? "Done" : w.status === "in_progress" ? "In progress" : "Open"}</span>
                 </Link>
               </li>
             ))}

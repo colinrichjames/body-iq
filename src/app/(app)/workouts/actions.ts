@@ -8,6 +8,7 @@ import { classify } from "@/lib/intensity";
 import { nextEasyDay } from "@/lib/stacking";
 import { getToday } from "@/lib/today";
 import { buildStructure, exercisesFromForm } from "@/lib/structure";
+import { hasProgress } from "@/lib/progress";
 import type { Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
 
@@ -58,9 +59,14 @@ export async function setStatus(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!["planned", "completed", "skipped"].includes(status)) return;
+  if (status === "planned") {
+    // Reset throws away a half-finished session's partial sets too.
+    const { data: cur } = await supabase.from("workouts").select("status").eq("id", id).maybeSingle<{ status: string }>();
+    if (cur && cur.status !== "completed") await supabase.from("workout_sets").delete().eq("workout_id", id);
+  }
   await supabase
     .from("workouts")
-    .update({ status, completed_at: status === "completed" ? new Date().toISOString() : null })
+    .update({ status, progress: null, completed_at: status === "completed" ? new Date().toISOString() : null })
     .eq("id", id);
   refresh();
   redirect(`/workouts/${id}`);
@@ -92,6 +98,7 @@ export async function finishWorkout(input: {
     .from("workouts")
     .update({
       status: "completed",
+      progress: null,
       completed_at: new Date().toISOString(),
       actual_duration_min: input.actualMinutes !== null ? Math.max(0, Math.round(input.actualMinutes)) : null,
       rpe,
@@ -265,4 +272,52 @@ export async function attachActivity(formData: FormData) {
   refresh();
   revalidatePath("/workouts/calendar");
   redirect(`/workouts/${id}`);
+}
+
+/** Called as the player advances and when it closes: keeps logged sets and the resume point on the server. */
+export async function saveProgress(input: {
+  id: string;
+  sets: SetLog[];
+  stepIndex: number;
+  blockIndex: number;
+  elapsedMs: number;
+}): Promise<{ error: string | null }> {
+  const { supabase, userId } = await requireUser();
+  const { data: w } = await supabase.from("workouts").select("status").eq("id", input.id).maybeSingle<{ status: string }>();
+  if (!w) return { error: "Workout not found." };
+  if (w.status === "completed") return { error: null };
+
+  const sets = input.sets.filter((x) => x.exercise && x.set_number > 0).slice(0, 500);
+  const elapsedMs = Math.max(0, Math.min(Math.round(input.elapsedMs), 24 * 3600 * 1000));
+  const blockIndex = Math.max(0, Math.round(input.blockIndex));
+  if (!hasProgress({ sets: sets.length, blockIndex, elapsedMs })) return { error: null };
+
+  const { error } = await supabase
+    .from("workouts")
+    .update({
+      status: "in_progress",
+      progress: { stepIndex: Math.max(0, Math.round(input.stepIndex)), blockIndex, elapsedMs, updatedAt: new Date().toISOString() },
+    })
+    .eq("id", input.id);
+  if (error) return { error: error.message };
+
+  await supabase.from("workout_sets").delete().eq("workout_id", input.id);
+  if (sets.length) {
+    const { error: setError } = await supabase.from("workout_sets").insert(
+      sets.map((x) => ({
+        user_id: userId,
+        workout_id: input.id,
+        exercise: x.exercise.slice(0, 120),
+        set_number: x.set_number,
+        reps: x.reps,
+        weight_lb: x.weight_lb,
+        rpe: x.rpe !== null && x.rpe !== undefined && x.rpe >= 1 && x.rpe <= 10 ? x.rpe : null,
+      })),
+    );
+    if (setError) return { error: setError.message };
+  }
+  refresh();
+  revalidatePath("/workouts/calendar");
+  revalidatePath(`/workouts/${input.id}`);
+  return { error: null };
 }

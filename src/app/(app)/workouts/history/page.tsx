@@ -4,6 +4,9 @@ import { formatDay } from "@/lib/dates";
 import { exerciseIndex, sessionsFor, type SetRow } from "@/lib/history";
 import { SPORT_NAME } from "@/lib/sport";
 import { card, field } from "@/components/ui";
+import { StatusBadge } from "@/components/status-badge";
+import { sessionUnits } from "@/lib/steps";
+import { progressLabel } from "@/lib/progress";
 import type { Workout } from "@/lib/types";
 
 const mi = (km: number) => km / 1.609344;
@@ -16,7 +19,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   const { q, x } = await searchParams;
   const { supabase } = await requireUser();
 
-  const [{ data: setRows }, { data: cardio }] = await Promise.all([
+  const [{ data: setRows }, { data: cardio }, { data: partial }] = await Promise.all([
     supabase
       .from("workout_sets")
       .select("exercise,set_number,reps,weight_lb,rpe,workout_id,workouts(workout_date,title)")
@@ -31,7 +34,10 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       .order("workout_date", { ascending: false })
       .limit(60)
       .returns<Workout[]>(),
+    supabase.from("workouts").select("*").eq("status", "in_progress").order("workout_date", { ascending: false }).returns<Workout[]>(),
   ]);
+  const setCounts = new Map<string, number>();
+  for (const r of setRows ?? []) setCounts.set(r.workout_id, (setCounts.get(r.workout_id) ?? 0) + 1);
   const rows = setRows ?? [];
   const term = (q ?? "").trim().toLowerCase();
   const index = exerciseIndex(rows).filter((e) => !term || e.name.toLowerCase().includes(term));
@@ -94,6 +100,30 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
           <form className="mt-4">
             <input name="q" defaultValue={q ?? ""} placeholder="Search exercises" className={field} />
           </form>
+          {(partial ?? []).length > 0 && (
+            <>
+              <h2 className="mt-5 text-sm text-amber-400">In progress</h2>
+              <ul className="mt-2 divide-y divide-zinc-800 rounded-xl border border-amber-900/50">
+                {(partial ?? []).map((w) => {
+                  const u = sessionUnits(w);
+                  return (
+                    <li key={w.id}>
+                      <Link href={`/workouts/${w.id}`} className="flex items-center justify-between gap-3 px-3 py-3">
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm">{w.title}</span>
+                          <span className="block text-xs text-zinc-500">
+                            {formatDay(w.workout_date)} · {progressLabel(u.kind, w.progress, setCounts.get(w.id) ?? 0, u.total)}
+                          </span>
+                        </span>
+                        <StatusBadge status="in_progress" />
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+
           <h2 className="mt-5 text-sm text-zinc-400">Strength</h2>
           {index.length === 0 ? (
             <p className="mt-2 text-sm text-zinc-500">{term ? "No match." : "Log sets in the workout assistant and they show up here."}</p>

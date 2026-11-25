@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import type { Workout } from "@/lib/types";
+import type { Workout, WorkoutSet } from "@/lib/types";
 import { AssistantLoader } from "./assistant-loader";
 
 export default async function StartWorkoutPage({ params }: { params: Promise<{ id: string }> }) {
@@ -33,5 +33,17 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
     }
   }
 
-  return <AssistantLoader workout={w} lastWeights={lastWeights} lastTime={lastTime} />;
+  // Resume point saved on the server (sets already logged + where the player was).
+  const { data: saved } = await supabase.from("workout_sets").select("*").eq("workout_id", id).order("created_at").returns<WorkoutSet[]>();
+  const serverResume =
+    w.status === "in_progress" && w.progress
+      ? {
+          logs: (saved ?? []).map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null })),
+          stepIndex: w.progress.stepIndex,
+          blockIndex: w.progress.blockIndex,
+          elapsedMs: w.progress.elapsedMs,
+        }
+      : null;
+
+  return <AssistantLoader workout={w} lastWeights={lastWeights} lastTime={lastTime} serverResume={serverResume} />;
 }

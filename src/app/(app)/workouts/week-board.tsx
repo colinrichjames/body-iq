@@ -5,16 +5,10 @@ import { useCallback, useState } from "react";
 import { formatDay } from "@/lib/dates";
 import { SPORT_NAME } from "@/lib/sport";
 import { useDragMove } from "@/components/use-drag-move";
+import { StatusBadge } from "@/components/status-badge";
 import { rescheduleWorkout } from "./actions";
 
 export type BoardWorkout = { id: string; date: string; title: string; sport: string; status: string; minutes: number | null };
-
-function Status({ status, overdue }: { status: string; overdue: boolean }) {
-  if (status === "completed") return <span className="text-sm text-emerald-400">Done</span>;
-  if (status === "skipped") return <span className="text-sm text-zinc-500">Skipped</span>;
-  if (overdue) return <span className="text-sm text-amber-400">Missed</span>;
-  return <span className="text-sm text-zinc-500">Planned</span>;
-}
 
 /** Week list with drag-and-drop: grab the handle on a session and drop it on another day. */
 export function WeekBoard({ days, today, workouts }: { days: string[]; today: string; workouts: BoardWorkout[] }) {
@@ -70,7 +64,7 @@ export function WeekBoard({ days, today, workouts }: { days: string[]; today: st
                           {w.minutes ? ` · ${w.minutes} min` : ""}
                         </p>
                       </div>
-                      <Status status={w.status} overdue={w.status === "planned" && day < today} />
+                      <StatusBadge status={w.status} overdue={day < today} />
                     </Link>
                   </li>
                 ))}

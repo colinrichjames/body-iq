@@ -78,7 +78,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       />
 
       <p className="mt-3 text-xs text-zinc-500">
-        Filled dot = done, outlined = planned, faded = skipped. {done} done this month{mins ? `, ${Math.round(mins / 6) / 10} h` : ""}.
+        Filled dot = done, amber ring = in progress, outlined = planned, faded = skipped. {done} done this month{mins ? `, ${Math.round(mins / 6) / 10} h` : ""}.
       </p>
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-400">
         {Object.keys(SPORT_DOT).map((s) => (
