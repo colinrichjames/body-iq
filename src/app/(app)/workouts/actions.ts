@@ -6,7 +6,8 @@ import { isUnit, paceProblem, toKm, type DistUnit } from "@/lib/distance";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { addDays, isIsoDate } from "@/lib/dates";
+import { addDays, formatDay, isIsoDate } from "@/lib/dates";
+import { planMissed } from "@/lib/adherence";
 import { classify } from "@/lib/intensity";
 import { nextEasyDay } from "@/lib/stacking";
 import { getToday } from "@/lib/today";
@@ -371,4 +372,45 @@ export async function saveProgress(input: {
   refresh();
   revalidatePath("/", "layout");
   return { error: null };
+}
+
+/**
+ * Deal with planned sessions whose day has passed. "adapt" moves at most two important recent ones to free days and
+ * skips the rest; "skip" skips everything. Computed here from the database, not from what the page showed.
+ */
+export async function adaptMissed(formData: FormData) {
+  const { supabase } = await requireUser();
+  const mode = String(formData.get("mode") ?? "adapt") === "skip" ? "skip" : "adapt";
+  const today = await getToday();
+  const { data } = await supabase
+    .from("workouts")
+    .select("id,workout_date,status,title,sport,race_id,planned_duration_min")
+    .gte("workout_date", addDays(today, -13))
+    .lte("workout_date", addDays(today, 7))
+    .returns<Pick<Workout, "id" | "workout_date" | "status" | "title" | "sport" | "race_id" | "planned_duration_min">[]>();
+  const rows = data ?? [];
+  const raceIds = [...new Set(rows.map((w) => w.race_id).filter((x): x is string => !!x))];
+  const raceDates: Record<string, string> = {};
+  if (raceIds.length) {
+    const { data: races } = await supabase.from("races").select("id,race_date").in("id", raceIds);
+    for (const r of races ?? []) raceDates[r.id as string] = r.race_date as string;
+  }
+  const plan = planMissed(rows, today, raceDates);
+  const moves = mode === "adapt" ? plan.moves : [];
+  const skipIds = mode === "adapt" ? plan.skips.map((s) => s.id) : plan.missed.map((s) => s.id);
+
+  for (const m of moves) {
+    const { error } = await supabase.from("workouts").update({ workout_date: m.to }).eq("id", m.id).eq("status", "planned");
+    if (error) redirect(flash("/workouts", `Couldn't move ${m.title}: ${error.message}`));
+  }
+  if (skipIds.length) {
+    const { error } = await supabase.from("workouts").update({ status: "skipped" }).in("id", skipIds);
+    if (error) redirect(flash("/workouts", error.message));
+  }
+  const plural = (n: number) => `${n} session${n === 1 ? "" : "s"}`;
+  const parts: string[] = [];
+  if (moves.length) parts.push(`Moved ${moves.map((m) => `${m.title} to ${formatDay(m.to)}`).join(" and ")}`);
+  if (skipIds.length) parts.push(`${moves.length ? "skipped" : "Skipped"} ${plural(skipIds.length)}`);
+  revalidatePath("/", "layout");
+  redirect(flash("/workouts", parts.length ? `${parts.join(", ")}.` : "Nothing was missed."));
 }

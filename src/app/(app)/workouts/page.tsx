@@ -7,6 +7,8 @@ import { HARD_DAY_RPE } from "@/lib/intensity";
 import { stackingWarnings } from "@/lib/stacking";
 import { weekSummary } from "@/lib/week";
 import { realignPlan } from "../races/actions";
+import { adaptMissed } from "./actions";
+import { adherence, planMissed, streaks } from "@/lib/adherence";
 import type { Workout } from "@/lib/types";
 import { btnPrimary } from "@/components/ui";
 import { WeekBoard } from "./week-board";
@@ -34,7 +36,7 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
     .from("workouts")
     .select("*")
     .gte("workout_date", from)
-    .lte("workout_date", addDays(weekEnd, 1))
+    .lte("workout_date", [addDays(weekEnd, 1), addDays(today, 7)].sort().at(-1)!)
     .order("workout_date")
     .order("created_at")
     .returns<Workout[]>();
@@ -51,6 +53,12 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
     }
   }
   const realign = [...missedByRace.entries()].find(([, n]) => n >= 3) ?? null;
+  const { data: raceRows } = await supabase.from("races").select("id,race_date");
+  const raceDates = Object.fromEntries((raceRows ?? []).map((r) => [r.id as string, r.race_date as string]));
+  const missedPlan = planMissed(history, today, raceDates);
+  const adh7 = adherence(history, today, 7);
+  const adh28 = adherence(history, today, 28);
+  const streak = streaks(history, today);
   const summary = weekSummary(workouts);
   const hm = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -83,29 +91,85 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
       </div>
 
 
-      {realign && (
+      {missedPlan.missed.length > 0 && (
         <section className="mt-4 rounded-2xl border border-amber-900 bg-amber-950/30 p-4 text-sm">
-          <p className="font-medium text-amber-300">You&apos;ve missed {realign[1]} planned sessions in the last two weeks.</p>
-          <p className="mt-1 text-zinc-400">Don&apos;t try to cram them in. Pick how to move on:</p>
+          <p className="font-medium text-amber-300">
+            {missedPlan.missed.length === 1 ? "You missed a planned session." : `You missed ${missedPlan.missed.length} planned sessions in the last two weeks.`}
+          </p>
+          <p className="mt-1 text-zinc-400">Don&apos;t cram them in. Body IQ keeps the important recent ones and drops the rest.</p>
+          <ul className="mt-3 space-y-1 text-zinc-300">
+            {missedPlan.moves.map((m) => (
+              <li key={m.id}>
+                <span className="text-emerald-400">Move</span> {m.title} ({formatDay(m.from, { weekday: true })}) to {formatDay(m.to, { weekday: true })}
+              </li>
+            ))}
+            {missedPlan.skips.map((x) => (
+              <li key={x.id} className="text-zinc-500">
+                Skip {x.title} ({formatDay(x.workout_date, { weekday: true })})
+              </li>
+            ))}
+          </ul>
           <div className="mt-3 flex flex-wrap gap-2">
-            <form action={realignPlan}>
-              <input type="hidden" name="id" value={realign[0]} />
-              <input type="hidden" name="mode" value="skip" />
-              <button type="submit" className="rounded-xl border border-zinc-700 px-3 py-2 text-zinc-200 active:bg-zinc-800">
-                Skip missed sessions
-              </button>
-            </form>
-            <form action={realignPlan}>
-              <input type="hidden" name="id" value={realign[0]} />
-              <input type="hidden" name="mode" value="rebuild" />
+            <form action={adaptMissed}>
+              <input type="hidden" name="mode" value="adapt" />
               <button type="submit" className="rounded-xl bg-amber-400 px-3 py-2 font-medium text-zinc-950 active:bg-amber-300">
-                Rebuild to race date
+                {missedPlan.moves.length ? "Apply this" : "Skip missed sessions"}
               </button>
             </form>
+            {missedPlan.moves.length > 0 && (
+              <form action={adaptMissed}>
+                <input type="hidden" name="mode" value="skip" />
+                <button type="submit" className="rounded-xl border border-zinc-700 px-3 py-2 text-zinc-200 active:bg-zinc-800">
+                  Skip them all
+                </button>
+              </form>
+            )}
+            {realign && (
+              <form action={realignPlan}>
+                <input type="hidden" name="id" value={realign[0]} />
+                <input type="hidden" name="mode" value="rebuild" />
+                <button type="submit" className="rounded-xl border border-zinc-700 px-3 py-2 text-zinc-200 active:bg-zinc-800">
+                  Rebuild to race date
+                </button>
+              </form>
+            )}
           </div>
-          <p className="mt-2 text-xs text-zinc-500">Rebuilding keeps everything you completed and shows what changed.</p>
+          {realign && <p className="mt-2 text-xs text-zinc-500">Rebuilding keeps everything you completed and re-plans back from race day.</p>}
         </section>
       )}
+
+      <section className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <h2 className="text-sm text-zinc-400">Consistency</h2>
+        {adh28.due === 0 ? (
+          <p className="mt-2 text-sm text-zinc-500">Finish or pass the date of a few planned sessions to see how consistent you are.</p>
+        ) : (
+          <>
+            <div className="mt-3 grid grid-cols-2 gap-3 tabular-nums">
+              <div>
+                <p className="text-xs text-zinc-500">Last 7 days</p>
+                <p className="text-xl font-semibold">{adh7.pct === null ? "--" : `${adh7.pct}%`}</p>
+                <p className="text-xs text-zinc-500">{adh7.due ? `${adh7.done} of ${adh7.due} sessions` : "nothing due yet"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Last 28 days</p>
+                <p className="text-xl font-semibold">{adh28.pct}%</p>
+                <p className="text-xs text-zinc-500">{adh28.done} of {adh28.due} sessions</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Session streak</p>
+                <p className="text-xl font-semibold">{streak.sessions}</p>
+                <p className="text-xs text-zinc-500">in a row completed</p>
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500">Week streak</p>
+                <p className="text-xl font-semibold">{streak.weeks}</p>
+                <p className="text-xs text-zinc-500">weeks at 80%+ (best {streak.bestWeeks})</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-zinc-500">Counts sessions that are done, skipped, or past their date. Upcoming and today&apos;s unfinished sessions don&apos;t count yet.</p>
+          </>
+        )}
+      </section>
 
       <section className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
         <h2 className="text-sm text-zinc-400">Training load</h2>
