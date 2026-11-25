@@ -5,7 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { addDays, diffDays, formatDay } from "@/lib/dates";
 import { computeInsights, SCORE_NAME } from "@/lib/insights";
-import { currentPhase, raceLabel } from "@/lib/plan";
+import { raceLabel } from "@/lib/plan";
+import { phaseInfo, planStartFrom } from "@/lib/race-phase";
+import { raceDayCard } from "@/lib/race-day";
 import { getToday } from "@/lib/today";
 import { computeReadiness } from "@/lib/readiness";
 import { fuelForDay } from "@/lib/fuel";
@@ -66,6 +68,11 @@ export default async function DashboardPage() {
   const [latest, previous] = scans;
   const workouts = workoutsRes.data ?? [];
   const nextRace = racesRes.data?.[0] ?? null;
+  const { data: planRows } = nextRace
+    ? await supabase.from("workouts").select("workout_date,created_at").eq("race_id", nextRace.id).eq("generated", true).returns<{ workout_date: string; created_at: string }[]>()
+    : { data: null };
+  const planStart = planStartFrom(planRows ?? []);
+  const nextPhase = nextRace ? phaseInfo(nextRace.race_type, nextRace.race_date, today, planStart) : null;
   const todays = workouts.filter((w) => w.workout_date === today);
   const readiness = computeReadiness(healthRes.data ?? []);
   const lastSync = syncRes.data?.[0] ?? null;
@@ -83,6 +90,7 @@ export default async function DashboardPage() {
     health: healthRes.data ?? [],
     profile: profileRes.data ?? null,
     nextRace,
+    planStart,
   });
 
   return (
@@ -242,8 +250,9 @@ export default async function DashboardPage() {
             <p className="text-sm text-zinc-400">Next race</p>
             <p className="mt-1 font-medium">{nextRace.name}</p>
             <p className="text-sm text-zinc-500">
-              {raceLabel(nextRace.race_type)} &middot; {currentPhase(nextRace.race_type, nextRace.race_date, today) ?? "race"} phase
+              {raceLabel(nextRace.race_type)}{nextPhase ? ` · ${nextPhase.text}` : ""}
             </p>
+            {raceDayCard(nextRace, today, weightKg) && <p className="mt-1 text-sm text-emerald-400">Race-day plan ready</p>}
           </div>
           <div className="text-right">
             <p className="text-3xl font-semibold tabular-nums text-emerald-400">{diffDays(today, nextRace.race_date)}</p>

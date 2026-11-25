@@ -1,5 +1,6 @@
 import { addDays, diffDays } from "./dates";
-import { currentPhase, raceLabel } from "./plan";
+import { raceLabel } from "./plan";
+import { phaseInfo } from "./race-phase";
 import { targetsFor } from "./targets";
 import type { BodyScan, DailyHealth, NutritionDay, Profile, Race, Workout } from "./types";
 
@@ -38,6 +39,8 @@ export function computeInsights(input: {
   health?: DailyHealth[]; // newest first, last ~8 days
   profile: Profile | null;
   nextRace: Race | null;
+  /** First day of the next race's current plan, for the phase label. */
+  planStart?: string | null;
 }): Insights {
   const { today, scans, workouts, nutrition, profile, nextRace } = input;
   const health = input.health ?? [];
@@ -235,9 +238,9 @@ export function computeInsights(input: {
   if (nextRace) {
     const days = diffDays(today, nextRace.race_date);
     if (days >= 0) {
-      const phase = currentPhase(nextRace.race_type, nextRace.race_date, today);
+      const phase = phaseInfo(nextRace.race_type, nextRace.race_date, today, input.planStart ?? null);
       bullets.push(
-        `${nextRace.name} (${raceLabel(nextRace.race_type)}) is ${days === 0 ? "today" : `in ${days} day${days === 1 ? "" : "s"}`}${phase ? `, you're in the ${phase} phase` : ""}.`,
+        `${nextRace.name} (${raceLabel(nextRace.race_type)}) is ${days === 0 ? "today" : `in ${days} day${days === 1 ? "" : "s"}`}${phase ? `, ${phase.text.charAt(0).toLowerCase()}${phase.text.slice(1)}` : ""}.`,
       );
     }
   }
