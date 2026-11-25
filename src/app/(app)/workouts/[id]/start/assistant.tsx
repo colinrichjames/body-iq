@@ -65,7 +65,7 @@ const fmt = (totalSec: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeights: Record<string, number> }) {
+export function Assistant({ workout, lastWeights, lastTime }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string> }) {
   const router = useRouter();
   const steps = useMemo(() => buildSteps(workout), [workout]);
   const blocks = workout.structure?.blocks ?? [];
@@ -106,6 +106,11 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
   const [reps, setReps] = useState(() => prefill(0, []).reps);
   const [weight, setWeight] = useState(() => prefill(0, []).weight);
   const [rpe, setRpe] = useState("");
+  const [setRpeVal, setSetRpeVal] = useState("");
+  const [distance, setDistance] = useState("");
+  const [avgHr, setAvgHr] = useState("");
+  const [avgPower, setAvgPower] = useState("");
+  const endurance = ["run", "bike", "swim", "hyrox"].includes(workout.sport);
   const [notes, setNotes] = useState("");
   const [minutes, setMinutes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -179,9 +184,10 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
     const w = weight.trim() === "" ? null : Number(weight);
     const nextLogs = [
       ...logs,
-      { exercise: step.exercise, set_number: step.setNumber, reps: Number.isFinite(r) ? r : null, weight_lb: Number.isFinite(w) ? w : null },
+      { exercise: step.exercise, set_number: step.setNumber, reps: Number.isFinite(r) ? r : null, weight_lb: Number.isFinite(w) ? w : null, rpe: setRpeVal === "" ? null : Number(setRpeVal) },
     ];
     setLogs(nextLogs);
+    setSetRpeVal("");
     navigator.vibrate?.(30);
     if (stepIndex >= steps.length - 1) return goFinish();
     if (step.restAfter > 0) {
@@ -211,6 +217,9 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
       actualMinutes: Number.isFinite(m) && minutes !== "" ? m : null,
       rpe: rpe === "" ? null : Number(rpe),
       notes,
+      distanceKm: distance === "" ? null : Number(distance) * 1.609344,
+      avgHr: avgHr === "" ? null : Number(avgHr),
+      avgPower: avgPower === "" ? null : Number(avgPower),
     });
     if (res.error) {
       setError(res.error);
@@ -244,6 +253,32 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
             Duration (min)
             <input value={minutes} onChange={(e) => setMinutes(e.target.value)} type="number" inputMode="numeric" className={`${field} mt-1`} />
           </label>
+          {endurance && (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <label className="text-sm text-zinc-400">
+                  Distance (mi)
+                  <input value={distance} onChange={(e) => setDistance(e.target.value)} type="number" inputMode="decimal" step="any" className={`${field} mt-1`} />
+                </label>
+                <label className="text-sm text-zinc-400">
+                  Avg HR
+                  <input value={avgHr} onChange={(e) => setAvgHr(e.target.value)} type="number" inputMode="numeric" className={`${field} mt-1`} />
+                </label>
+                <label className="text-sm text-zinc-400">
+                  Avg watts
+                  <input value={avgPower} onChange={(e) => setAvgPower(e.target.value)} type="number" inputMode="numeric" className={`${field} mt-1`} />
+                </label>
+              </div>
+              {distance !== "" && Number(minutes) > 0 && Number(distance) > 0 && (
+                <p className="text-sm text-zinc-500">
+                  Pace {(() => {
+                    const p = Number(minutes) / Number(distance);
+                    return `${Math.floor(p)}:${String(Math.round((p % 1) * 60)).padStart(2, "0")} /mi`;
+                  })()}
+                </p>
+              )}
+            </>
+          )}
           <label className="block text-sm text-zinc-400">
             How hard was it? (RPE 1-10)
             <select value={rpe} onChange={(e) => setRpe(e.target.value)} className={`${field} mt-1`}>
@@ -309,6 +344,7 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
             {step.weight ? ` @ ${step.weight} lb` : ""}
           </p>
           {step.note && <p className="mt-1 text-sm text-zinc-500">{step.note}</p>}
+          {lastTime[step.exercise] && <p className="mt-1 text-sm text-emerald-400/80">Last time: {lastTime[step.exercise]}</p>}
 
           <div className="mt-6 grid grid-cols-2 gap-3">
             <label className="text-sm text-zinc-400">
@@ -319,6 +355,16 @@ export function Assistant({ workout, lastWeights }: { workout: Workout; lastWeig
               Weight (lb)
               <input value={weight} onChange={(e) => setWeight(e.target.value)} type="number" inputMode="decimal" step="2.5" className={`${field} mt-1 text-2xl`} />
             </label>
+            <div className="col-span-2">
+              <p className="text-sm text-zinc-400">Effort (optional)</p>
+              <div className="mt-1 grid grid-cols-6 gap-1">
+                {["6", "7", "8", "9", "10"].map((n) => (
+                  <button key={n} type="button" onClick={() => setSetRpeVal(setRpeVal === n ? "" : n)} className={`rounded-lg border py-2 text-sm ${setRpeVal === n ? "border-emerald-500 bg-emerald-500/20 text-emerald-300" : "border-zinc-800 text-zinc-400"}`}>
+                    RPE {n}
+                  </button>
+                ))}
+              </div>
+            </div>
             {plates && (
               <p className="col-span-2 text-sm text-zinc-500">
                 Barbell (45 lb bar): {plates.length ? `${plates.join(" + ")} per side` : "bar only"}

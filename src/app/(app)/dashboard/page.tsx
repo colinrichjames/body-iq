@@ -272,8 +272,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </a>
         {" · "}
         <a href="/export?type=workouts" className="underline">
-          Workouts (CSV)
+          Workouts
         </a>
+        {" · "}
+        <a href="/export?type=sets" className="underline">
+          Sets
+        </a>
+        {" · "}
+        <a href="/export?type=food" className="underline">
+          Food
+        </a>
+        {" · "}
+        <a href="/export?type=activities" className="underline">
+          Garmin
+        </a>
+        {" (CSV)"}
       </p>
     </main>
   );

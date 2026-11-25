@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { formatDay } from "@/lib/dates";
+import { addDays, formatDay } from "@/lib/dates";
 import type { Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, card } from "@/components/ui";
 import { sessionFuel } from "@/lib/fuel";
 import { field } from "@/components/ui";
-import { deleteWorkout, duplicateWorkout, moveWorkout, setStatus } from "../actions";
+import { attachActivity, deleteWorkout, duplicateWorkout, moveWorkout, setStatus } from "../actions";
+import { garminSport } from "@/lib/sport";
 
 export default async function WorkoutPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
@@ -16,6 +17,28 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
   if (!w) notFound();
 
   const s = w.structure;
+  type Act = { id: string; sport: string | null; title: string | null; started_at: string; duration_sec: number | null; distance_m: number | null; avg_hr: number | null; training_load: number | null };
+  let suggestions: Act[] = [];
+  if (w.status !== "completed") {
+    const { data: acts } = await supabase
+      .from("activities")
+      .select("id,sport,title,started_at,duration_sec,distance_m,avg_hr,training_load")
+      .gte("started_at", `${addDays(w.workout_date, -1)}T00:00:00Z`)
+      .lte("started_at", `${addDays(w.workout_date, 1)}T23:59:59Z`)
+      .order("started_at")
+      .returns<Act[]>();
+    const { data: used } = await supabase.from("workouts").select("activity_id").not("activity_id", "is", null);
+    const usedIds = new Set((used ?? []).map((u) => u.activity_id));
+    suggestions = (acts ?? []).filter((a) => !usedIds.has(a.id) && garminSport(a.sport) === w.sport);
+  }
+  const miles = w.actual_distance_km ? w.actual_distance_km / 1.609344 : null;
+  const pace =
+    miles && w.actual_duration_min && w.sport !== "swim"
+      ? (() => {
+          const p = w.actual_duration_min / miles;
+          return `${Math.floor(p)}:${String(Math.round((p % 1) * 60)).padStart(2, "0")} /mi`;
+        })()
+      : null;
   const fuel = sessionFuel(w);
   const hasGuide = !!(s?.exercises?.length || s?.blocks?.length);
 
@@ -83,7 +106,44 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
             {w.actual_duration_min ? `${w.actual_duration_min} min` : ""}
             {w.rpe ? ` · RPE ${w.rpe}/10` : ""}
           </p>
+          {(miles || w.avg_hr || w.avg_power) && (
+            <p className="mt-1 text-zinc-400">
+              {miles ? `${miles.toFixed(2)} mi` : ""}
+              {pace ? ` · ${pace}` : ""}
+              {w.avg_hr ? ` · avg ${w.avg_hr} bpm` : ""}
+              {w.avg_power ? ` · ${w.avg_power} W` : ""}
+            </p>
+          )}
+          {w.activity_id && <p className="mt-1 text-xs text-zinc-500">From Garmin</p>}
           {w.notes && <p className="mt-2 whitespace-pre-line text-zinc-300">{w.notes}</p>}
+        </section>
+      )}
+
+      {suggestions.length > 0 && (
+        <section className={`${card} mt-5 text-sm`}>
+          <h2 className="text-zinc-400">Did you already do this? Garmin has:</h2>
+          <ul className="mt-2 divide-y divide-zinc-800">
+            {suggestions.map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-3 py-2">
+                <span className="min-w-0">
+                  <span className="block truncate">{a.title || a.sport}</span>
+                  <span className="block text-xs text-zinc-500">
+                    {formatDay(a.started_at.slice(0, 10))}
+                    {a.duration_sec ? ` · ${Math.round(a.duration_sec / 60)} min` : ""}
+                    {a.distance_m ? ` · ${(Number(a.distance_m) / 1609.34).toFixed(1)} mi` : ""}
+                    {a.avg_hr ? ` · ${a.avg_hr} bpm` : ""}
+                  </span>
+                </span>
+                <form action={attachActivity}>
+                  <input type="hidden" name="id" value={w.id} />
+                  <input type="hidden" name="activity_id" value={a.id} />
+                  <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
+                    Use this
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 
