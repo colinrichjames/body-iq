@@ -109,15 +109,31 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   };
   const [reps, setReps] = useState(() => prefill(0, []).reps);
   const [weight, setWeight] = useState(() => prefill(0, []).weight);
-  const [rpe, setRpe] = useState("");
+  // Summary fields (notes, RPE, minutes, HR, power) are kept on this phone too, so a refresh doesn't lose what you typed.
+  const sumKey = `${draftKey}-summary`;
+  const [sum0] = useState<Partial<Record<"notes" | "rpe" | "minutes" | "avgHr" | "avgPower", string>>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(sumKey) ?? "{}") ?? {};
+    } catch {
+      return {};
+    }
+  });
+  const [rpe, setRpe] = useState(sum0.rpe ?? "");
   const [setRpeVal, setSetRpeVal] = useState("");
   const [unit, setUnit] = useState<DistUnit>(distanceUnit);
   const [distance, setDistance] = useState(() => (plannedDistanceKm ? String(fromKm(plannedDistanceKm, distanceUnit)) : ""));
-  const [avgHr, setAvgHr] = useState("");
-  const [avgPower, setAvgPower] = useState("");
+  const [avgHr, setAvgHr] = useState(sum0.avgHr ?? "");
+  const [avgPower, setAvgPower] = useState(sum0.avgPower ?? "");
   const endurance = ["run", "bike", "swim", "hyrox"].includes(workout.sport);
-  const [notes, setNotes] = useState("");
-  const [minutes, setMinutes] = useState("");
+  const [notes, setNotes] = useState(sum0.notes ?? "");
+  const [minutes, setMinutes] = useState(sum0.minutes ?? "");
+  useEffect(() => {
+    try {
+      if (notes || rpe || minutes || avgHr || avgPower) localStorage.setItem(sumKey, JSON.stringify({ notes, rpe, minutes, avgHr, avgPower }));
+    } catch {
+      // storage unavailable
+    }
+  }, [sumKey, notes, rpe, minutes, avgHr, avgPower]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const buzzed = useRef(false);
@@ -375,6 +391,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     }
     try {
       localStorage.removeItem(draftKey);
+      localStorage.removeItem(sumKey);
     } catch {
       // storage unavailable
     }

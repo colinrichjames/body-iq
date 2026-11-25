@@ -78,6 +78,7 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
         action={quickAdd}
         className={`${card} mt-6 space-y-3`}
         dateField="day"
+        draftKey="nutrition-quick-add"
         existingDays={rows.filter((d) => (d.calories ?? 0) > 0).map((d) => d.day)}
         windowStart={since}
         message="Replace what's already logged for {day}? This overwrites that day's totals."

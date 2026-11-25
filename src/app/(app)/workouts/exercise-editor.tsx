@@ -1,7 +1,8 @@
 "use client";
 
 import { Field } from "@/components/field";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { loadDraft, saveDraft, usableDraft } from "@/lib/draft";
 import { btnGhost, field } from "@/components/ui";
 import { parseExercises } from "@/lib/structure";
 import type { Exercise } from "@/lib/types";
@@ -23,9 +24,23 @@ const blank = (): Row => toRow({ name: "" });
  * One row per exercise, so nothing depends on line breaks surviving a text box.
  * Submits as a hidden JSON field (exercises_json). Paste a list to fill rows from text.
  */
-export function ExerciseEditor({ initial }: { initial: Exercise[] }) {
+export function ExerciseEditor({ initial, draftKey }: { initial: Exercise[]; draftKey?: string }) {
   const [rows, setRows] = useState<Row[]>(() => (initial.length ? initial.map(toRow) : [blank()]));
   const [paste, setPaste] = useState("");
+
+  // Bring back unsaved rows after a refresh (the parent form clears the draft once a save goes through).
+  useEffect(() => {
+    if (!draftKey) return;
+    const d = usableDraft(draftKey, new URLSearchParams(window.location.search).has("error"));
+    const saved = d?.extra as { rows?: Row[] } | undefined;
+    if (saved?.rows?.some((r) => r.name.trim())) queueMicrotask(() => setRows(saved.rows!.map((r) => ({ ...r, key: ++counter }))));
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftKey) return;
+    // Don't overwrite a stored draft with the untouched blank row before it has been restored.
+    if (!rows.some((r) => r.name.trim()) && !loadDraft(draftKey)) return;
+    saveDraft(draftKey, { extra: { rows } });
+  }, [rows, draftKey]);
 
   const update = (key: number, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const num = (s: string) => (s.trim() === "" || !Number.isFinite(Number(s)) ? undefined : Number(s));
