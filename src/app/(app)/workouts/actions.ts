@@ -9,7 +9,7 @@ import { nextEasyDay } from "@/lib/stacking";
 import { getToday } from "@/lib/today";
 import { buildStructure, exercisesFromForm } from "@/lib/structure";
 import { hasProgress } from "@/lib/progress";
-import type { Workout, WorkoutStructure } from "@/lib/types";
+import type { BlockLog, SetLog, Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
 
 const SPORTS: Sport[] = ["strength", "run", "bike", "swim", "hyrox", "mobility", "other"];
@@ -79,7 +79,16 @@ export async function deleteWorkout(formData: FormData) {
   redirect("/workouts");
 }
 
-export type SetLog = { exercise: string; set_number: number; reps: number | null; weight_lb: number | null; rpe?: number | null };
+export type { SetLog };
+
+function cleanBlocks(blocks: BlockLog[] | undefined): BlockLog[] | null {
+  if (!blocks?.length) return null;
+  return blocks.slice(0, 60).map((b) => ({
+    name: String(b.name ?? "").slice(0, 120),
+    seconds: b.skipped || typeof b.seconds !== "number" || !Number.isFinite(b.seconds) ? null : Math.max(0, Math.round(b.seconds)),
+    skipped: b.skipped === true,
+  }));
+}
 
 export async function finishWorkout(input: {
   id: string;
@@ -90,6 +99,7 @@ export async function finishWorkout(input: {
   distanceKm?: number | null;
   avgHr?: number | null;
   avgPower?: number | null;
+  blocks?: BlockLog[];
 }) {
   const { supabase, userId } = await requireUser();
   const rpe = input.rpe !== null && input.rpe >= 1 && input.rpe <= 10 ? Math.round(input.rpe) : null;
@@ -99,6 +109,7 @@ export async function finishWorkout(input: {
     .update({
       status: "completed",
       progress: null,
+      block_results: cleanBlocks(input.blocks),
       completed_at: new Date().toISOString(),
       actual_duration_min: input.actualMinutes !== null ? Math.max(0, Math.round(input.actualMinutes)) : null,
       rpe,
@@ -122,6 +133,7 @@ export async function finishWorkout(input: {
       reps: s.reps,
       weight_lb: s.weight_lb,
       rpe: s.rpe !== null && s.rpe !== undefined && s.rpe >= 1 && s.rpe <= 10 ? s.rpe : null,
+      skipped: s.skipped === true,
     }));
   if (rows.length) {
     const { error: setError } = await supabase.from("workout_sets").insert(rows);
@@ -281,6 +293,7 @@ export async function saveProgress(input: {
   stepIndex: number;
   blockIndex: number;
   elapsedMs: number;
+  blocks?: BlockLog[];
 }): Promise<{ error: string | null }> {
   const { supabase, userId } = await requireUser();
   const { data: w } = await supabase.from("workouts").select("status").eq("id", input.id).maybeSingle<{ status: string }>();
@@ -290,13 +303,22 @@ export async function saveProgress(input: {
   const sets = input.sets.filter((x) => x.exercise && x.set_number > 0).slice(0, 500);
   const elapsedMs = Math.max(0, Math.min(Math.round(input.elapsedMs), 24 * 3600 * 1000));
   const blockIndex = Math.max(0, Math.round(input.blockIndex));
-  if (!hasProgress({ sets: sets.length, blockIndex, elapsedMs })) return { error: null };
+  if (!hasProgress({ sets: sets.length, blockIndex, elapsedMs })) {
+    // Stepped all the way back: nothing left worth keeping, so the session returns to planned.
+    if (w.status === "in_progress") {
+      await supabase.from("workout_sets").delete().eq("workout_id", input.id);
+      await supabase.from("workouts").update({ status: "planned", progress: null }).eq("id", input.id);
+      refresh();
+      revalidatePath(`/workouts/${input.id}`);
+    }
+    return { error: null };
+  }
 
   const { error } = await supabase
     .from("workouts")
     .update({
       status: "in_progress",
-      progress: { stepIndex: Math.max(0, Math.round(input.stepIndex)), blockIndex, elapsedMs, updatedAt: new Date().toISOString() },
+      progress: { stepIndex: Math.max(0, Math.round(input.stepIndex)), blockIndex, elapsedMs, updatedAt: new Date().toISOString(), blocks: cleanBlocks(input.blocks) ?? [] },
     })
     .eq("id", input.id);
   if (error) return { error: error.message };
@@ -312,6 +334,7 @@ export async function saveProgress(input: {
         reps: x.reps,
         weight_lb: x.weight_lb,
         rpe: x.rpe !== null && x.rpe !== undefined && x.rpe >= 1 && x.rpe <= 10 ? x.rpe : null,
+        skipped: x.skipped === true,
       })),
     );
     if (setError) return { error: setError.message };

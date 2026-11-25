@@ -38,7 +38,8 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
   const serverResume =
     w.status === "in_progress" && w.progress
       ? {
-          logs: (saved ?? []).map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null })),
+          logs: (saved ?? []).map((r) => ({ exercise: r.exercise, set_number: r.set_number, reps: r.reps, weight_lb: r.weight_lb !== null ? Number(r.weight_lb) : null, rpe: r.rpe !== null ? Number(r.rpe) : null, skipped: r.skipped })),
+          blocks: w.progress.blocks ?? [],
           stepIndex: w.progress.stepIndex,
           blockIndex: w.progress.blockIndex,
           elapsedMs: w.progress.elapsedMs,
