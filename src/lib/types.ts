@@ -81,6 +81,9 @@ export type Workout = {
   generated: boolean;
   actual_duration_min: number | null;
   actual_distance_km: number | null;
+  avg_hr: number | null;
+  avg_power: number | null;
+  activity_id: string | null;
   rpe: number | null;
   notes: string | null;
   completed_at: string | null;
@@ -95,6 +98,7 @@ export type WorkoutSet = {
   set_number: number;
   reps: number | null;
   weight_lb: number | null;
+  rpe: number | null;
   created_at: string;
 };
 

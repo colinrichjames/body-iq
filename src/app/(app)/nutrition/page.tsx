@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { addDays, formatDay } from "@/lib/dates";
 import { getToday } from "@/lib/today";
@@ -63,6 +64,10 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
           </>
         )}
       </section>
+
+      <Link href="/nutrition/log" className="mt-5 block rounded-2xl bg-emerald-500 px-4 py-3.5 text-center font-medium text-zinc-950 active:bg-emerald-400">
+        Log food: scan, search or add by hand
+      </Link>
 
       <Importer />
 

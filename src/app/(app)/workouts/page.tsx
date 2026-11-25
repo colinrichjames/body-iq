@@ -8,6 +8,7 @@ import { weekSummary } from "@/lib/week";
 import { realignPlan } from "../races/actions";
 import type { Workout } from "@/lib/types";
 import { btnPrimary } from "@/components/ui";
+import { WeekBoard } from "./week-board";
 
 const SPORT_LABEL: Record<string, string> = {
   strength: "Strength",
@@ -58,7 +59,10 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Training</h1>
         <Link href="/workouts/calendar" className="ml-auto mr-3 text-sm text-zinc-400">
-          Month view
+          Month
+        </Link>
+        <Link href="/workouts/history" className="mr-3 text-sm text-zinc-400">
+          History
         </Link>
         <Link href="/workouts/new" className={`${btnPrimary} px-3 py-2 text-sm`}>
           Add workout
@@ -171,50 +175,12 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
         </section>
       )}
 
-      <div className="mt-4 space-y-4">
-        {days.map((day) => {
-          const list = workouts.filter((w) => w.workout_date === day);
-          const isToday = day === today;
-          return (
-            <section key={day}>
-              <h2 className={`text-xs font-medium uppercase tracking-wider ${isToday ? "text-emerald-400" : "text-zinc-500"}`}>
-                {formatDay(day)}
-                {isToday && " · today"}
-              </h2>
-              {list.length === 0 ? (
-                <p className="mt-1 text-sm text-zinc-600">Rest</p>
-              ) : (
-                <ul className="mt-1 space-y-2">
-                  {list.map((w) => (
-                    <li key={w.id}>
-                      <Link
-                        href={`/workouts/${w.id}`}
-                        className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 active:bg-zinc-800"
-                      >
-                        <div className="min-w-0">
-                          <p className={`truncate font-medium ${w.status === "skipped" ? "text-zinc-500 line-through" : ""}`}>{w.title}</p>
-                          <p className="text-xs text-zinc-500">
-                            {SPORT_LABEL[w.sport]}
-                            {w.planned_duration_min ? ` · ${w.planned_duration_min} min` : ""}
-                          </p>
-                        </div>
-                        <StatusDot status={w.status} overdue={w.status === "planned" && day < today} />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          );
-        })}
-      </div>
+      <WeekBoard
+        key={workouts.map((w) => `${w.id}${w.workout_date}${w.status}`).join()}
+        days={days}
+        today={today}
+        workouts={workouts.map((w) => ({ id: w.id, date: w.workout_date, title: w.title, sport: w.sport, status: w.status, minutes: w.planned_duration_min }))}
+      />
     </main>
   );
-}
-
-function StatusDot({ status, overdue }: { status: string; overdue: boolean }) {
-  if (status === "completed") return <span className="text-sm text-emerald-400">Done</span>;
-  if (status === "skipped") return <span className="text-sm text-zinc-500">Skipped</span>;
-  if (overdue) return <span className="text-sm text-amber-400">Missed</span>;
-  return <span className="text-sm text-zinc-500">Planned</span>;
 }

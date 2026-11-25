@@ -73,7 +73,7 @@ export async function deleteWorkout(formData: FormData) {
   redirect("/workouts");
 }
 
-export type SetLog = { exercise: string; set_number: number; reps: number | null; weight_lb: number | null };
+export type SetLog = { exercise: string; set_number: number; reps: number | null; weight_lb: number | null; rpe?: number | null };
 
 export async function finishWorkout(input: {
   id: string;
@@ -81,6 +81,9 @@ export async function finishWorkout(input: {
   actualMinutes: number | null;
   rpe: number | null;
   notes: string;
+  distanceKm?: number | null;
+  avgHr?: number | null;
+  avgPower?: number | null;
 }) {
   const { supabase, userId } = await requireUser();
   const rpe = input.rpe !== null && input.rpe >= 1 && input.rpe <= 10 ? Math.round(input.rpe) : null;
@@ -93,6 +96,9 @@ export async function finishWorkout(input: {
       actual_duration_min: input.actualMinutes !== null ? Math.max(0, Math.round(input.actualMinutes)) : null,
       rpe,
       notes: input.notes.trim() || null,
+      actual_distance_km: input.distanceKm && input.distanceKm > 0 && input.distanceKm < 1000 ? Math.round(input.distanceKm * 100) / 100 : null,
+      avg_hr: input.avgHr && input.avgHr >= 30 && input.avgHr <= 250 ? Math.round(input.avgHr) : null,
+      avg_power: input.avgPower && input.avgPower >= 0 && input.avgPower <= 3000 ? Math.round(input.avgPower) : null,
     })
     .eq("id", input.id);
   if (error) return { error: error.message };
@@ -108,6 +114,7 @@ export async function finishWorkout(input: {
       set_number: s.set_number,
       reps: s.reps,
       weight_lb: s.weight_lb,
+      rpe: s.rpe !== null && s.rpe !== undefined && s.rpe >= 1 && s.rpe <= 10 ? s.rpe : null,
     }));
   if (rows.length) {
     const { error: setError } = await supabase.from("workout_sets").insert(rows);
@@ -222,4 +229,40 @@ export async function duplicateWorkout(formData: FormData) {
   refresh();
   revalidatePath("/workouts/calendar");
   redirect(`/workouts/${copy.id}`);
+}
+
+/** Drag-and-drop move. Returns instead of redirecting so the board can update in place. */
+export async function rescheduleWorkout(id: string, date: string): Promise<{ error: string | null }> {
+  const { supabase } = await requireUser();
+  if (!isIsoDate(date)) return { error: "Invalid date." };
+  const { error } = await supabase.from("workouts").update({ workout_date: date }).eq("id", id);
+  if (error) return { error: error.message };
+  refresh();
+  revalidatePath("/workouts/calendar");
+  return { error: null };
+}
+
+/** Complete a planned session from a synced Garmin activity: duration, distance, heart rate, power. */
+export async function attachActivity(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const activityId = String(formData.get("activity_id") ?? "");
+  const { data: a } = await supabase.from("activities").select("*").eq("id", activityId).maybeSingle();
+  if (!a) redirect(`/workouts/${id}?error=${encodeURIComponent("Activity not found.")}`);
+  const { error } = await supabase
+    .from("workouts")
+    .update({
+      status: "completed",
+      completed_at: a.started_at,
+      activity_id: a.id,
+      actual_duration_min: a.duration_sec ? Math.round(a.duration_sec / 60) : null,
+      actual_distance_km: a.distance_m ? Math.round(Number(a.distance_m) / 10) / 100 : null,
+      avg_hr: a.avg_hr,
+      avg_power: a.avg_power,
+    })
+    .eq("id", id);
+  if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(error.message)}`);
+  refresh();
+  revalidatePath("/workouts/calendar");
+  redirect(`/workouts/${id}`);
 }

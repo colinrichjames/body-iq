@@ -2,8 +2,8 @@ import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-const TABLES = ["profiles", "body_scans", "races", "workouts", "workout_sets", "nutrition_days", "hyrox_benchmarks", "activities", "daily_health"] as const;
-const CSV_TABLES: Record<string, string> = { workouts: "workouts", sets: "workout_sets", nutrition: "nutrition_days", scans: "body_scans" };
+const TABLES = ["profiles", "body_scans", "races", "workouts", "workout_sets", "nutrition_days", "food_entries", "custom_foods", "hyrox_benchmarks", "activities", "daily_health"] as const;
+const CSV_TABLES: Record<string, string> = { workouts: "workouts", sets: "workout_sets", nutrition: "nutrition_days", food: "food_entries", activities: "activities", health: "daily_health", scans: "body_scans" };
 
 function csvCell(v: unknown): string {
   if (v === null || v === undefined) return "";
@@ -13,7 +13,8 @@ function csvCell(v: unknown): string {
 
 function toCsv(rows: Record<string, unknown>[]): string {
   if (rows.length === 0) return "";
-  const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+  // Raw Garmin payloads are huge and belong in the JSON export, not a spreadsheet.
+  const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))].filter((c) => c !== "raw_json");
   return [cols.join(","), ...rows.map((r) => cols.map((c) => csvCell(r[c])).join(","))].join("\n");
 }
 
