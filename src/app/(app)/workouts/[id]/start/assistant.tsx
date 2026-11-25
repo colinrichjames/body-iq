@@ -389,6 +389,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
       setSaving(false);
       return;
     }
+    if (res.message) toast(res.message);
     try {
       localStorage.removeItem(draftKey);
       localStorage.removeItem(sumKey);

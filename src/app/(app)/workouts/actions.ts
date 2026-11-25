@@ -13,6 +13,8 @@ import { nextEasyDay } from "@/lib/stacking";
 import { getToday } from "@/lib/today";
 import { buildStructure, exercisesFromForm } from "@/lib/structure";
 import { hasProgress } from "@/lib/progress";
+import { plannedSetLogs } from "@/lib/lifting";
+import { insightsText, sessionInsights } from "@/lib/session-insights";
 import type { BlockLog, SetLog, Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
 
@@ -67,7 +69,7 @@ export async function addWorkout(formData: FormData) {
 }
 
 export async function setStatus(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, userId } = await requireUser();
   const id = String(formData.get("id") ?? "");
   const status = String(formData.get("status") ?? "");
   if (!["planned", "completed", "skipped"].includes(status)) return;
@@ -80,9 +82,48 @@ export async function setStatus(formData: FormData) {
     .from("workouts")
     .update({ status, progress: null, completed_at: status === "completed" ? new Date().toISOString() : null })
     .eq("id", id);
+
+  let extra = "";
+  if (status === "completed") extra = await recordPlannedSets(supabase, userId, id);
   refresh();
   const said = { completed: "Marked done.", skipped: "Marked skipped.", planned: "Reset to planned." }[status];
-  redirect(flash(`/workouts/${id}`, said ?? "Updated."));
+  redirect(flash(`/workouts/${id}`, `${said ?? "Updated."}${extra}`));
+}
+
+/**
+ * "Mark done" means you did the plan, so record the planned sets as real sets (planned weight, or the last weight you
+ * used) unless sets are already logged. Then report PRs and next weights. Never blocks the status change.
+ */
+async function recordPlannedSets(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], userId: string, id: string): Promise<string> {
+  try {
+    const { data: w } = await supabase.from("workouts").select("*").eq("id", id).maybeSingle<Workout>();
+    const exercises = w?.structure?.exercises ?? [];
+    if (!w || !exercises.length) return "";
+    const { count } = await supabase.from("workout_sets").select("id", { count: "exact", head: true }).eq("workout_id", id);
+    if ((count ?? 0) > 0) return "";
+
+    const names = exercises.map((e) => e.name);
+    const lastWeights: Record<string, number> = {};
+    const { data: prev } = await supabase
+      .from("workout_sets")
+      .select("exercise, weight_lb")
+      .in("exercise", names)
+      .neq("workout_id", id)
+      .not("weight_lb", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(300);
+    for (const r of prev ?? []) if (!(r.exercise in lastWeights)) lastWeights[r.exercise] = Number(r.weight_lb);
+
+    const logs = plannedSetLogs(exercises, w.structure?.rounds, lastWeights);
+    const { error } = await supabase.from("workout_sets").insert(
+      logs.map((l) => ({ user_id: userId, workout_id: id, exercise: l.exercise.slice(0, 120), set_number: l.set_number, reps: l.reps, weight_lb: l.weight_lb, rpe: null, skipped: false })),
+    );
+    if (error) return "";
+    const ins = await sessionInsights(supabase, w, logs);
+    return ` Recorded ${logs.length} planned set${logs.length === 1 ? "" : "s"}.${insightsText(ins)}`;
+  } catch {
+    return "";
+  }
 }
 
 export async function deleteWorkout(formData: FormData) {
@@ -121,7 +162,7 @@ export async function finishWorkout(input: {
   avgHr?: number | null;
   avgPower?: number | null;
   blocks?: BlockLog[];
-}) {
+}): Promise<{ error: string | null; message?: string }> {
   const { supabase, userId } = await requireUser();
   const rpe = input.rpe !== null && input.rpe >= 1 && input.rpe <= 10 ? Math.round(input.rpe) : null;
 
@@ -169,8 +210,15 @@ export async function finishWorkout(input: {
     if (setError) return { error: setError.message };
   }
 
+  let message = "";
+  try {
+    const { data: w } = await supabase.from("workouts").select("id,workout_date,structure").eq("id", input.id).maybeSingle<Pick<Workout, "id" | "workout_date" | "structure">>();
+    if (w) message = insightsText(await sessionInsights(supabase, w, input.sets)).trim();
+  } catch {
+    // insights are a bonus; the workout is already saved
+  }
   refresh();
-  return { error: null };
+  return { error: null, message };
 }
 
 /** Move a session to another day (free drag-and-drop, phone style). */
