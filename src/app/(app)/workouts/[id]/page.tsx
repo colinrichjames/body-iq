@@ -14,7 +14,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { recap } from "@/lib/player";
 import { sessionInsights, type SessionInsights } from "@/lib/session-insights";
 import { prText } from "@/lib/lifting";
-import { GYM_READY, isSwapped, stationsIn } from "@/lib/hyrox-swaps";
+import { GYM_READY, isStale, isSwapped, stationsIn } from "@/lib/hyrox-swaps";
 import { fmtDist, fmtPace } from "@/lib/distance";
 import { buildSteps } from "@/lib/steps";
 import { restSummary } from "@/lib/context";
@@ -162,8 +162,8 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
           <h2 className="text-sm text-zinc-400">{isSwapped(s) ? "Gym versions are on" : "No Hyrox equipment?"}</h2>
           <p className="mt-1 text-sm text-zinc-300">
             {isSwapped(s)
-              ? "Stations that need a sled, SkiErg or wall are replaced with classic-gym versions that train the same muscles."
-              : "Swap the SkiErg, sleds, wall balls and sandbag for exercises from a regular gym. You can switch back any time."}
+              ? "Stations that need a sled, SkiErg, wall, big floor or carry space are replaced with classic-gym versions that train the same muscles."
+              : "Swap the SkiErg, sleds, wall balls, sandbag, farmers carry and burpee broad jumps for exercises from a regular gym with little floor space. You can switch back any time."}
           </p>
           <ul className="mt-3 divide-y divide-zinc-800 text-sm">
             {stationsIn(s).map((st) => (
@@ -178,6 +178,16 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
           </ul>
           <p className="mt-2 text-xs text-zinc-600">These need no swap: {GYM_READY.join("; ")}.</p>
           <div className="mt-3 flex flex-wrap gap-2">
+            {isStale(s) && (
+              <form action={setGymSwaps}>
+                <input type="hidden" name="id" value={w.id} />
+                <input type="hidden" name="mode" value="on" />
+                <input type="hidden" name="scope" value="one" />
+                <button type="submit" className={`${btnPrimary} px-3 py-2 text-sm`}>
+                  Update to the latest gym versions
+                </button>
+              </form>
+            )}
             <form action={setGymSwaps}>
               <input type="hidden" name="id" value={w.id} />
               <input type="hidden" name="mode" value={isSwapped(s) ? "off" : "on"} />
