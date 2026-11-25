@@ -9,6 +9,7 @@ import { addDays, isIsoDate } from "@/lib/dates";
 import { parseDuration } from "@/lib/hyrox";
 import { generatePlan, RACE_TYPES } from "@/lib/plan";
 import { planSummary, type PlanResult } from "@/lib/plan-summary";
+import { affectsPlan, raceChanges, type RaceFields } from "@/lib/race-edit";
 import { getToday } from "@/lib/today";
 import type { Race, RaceType } from "@/lib/types";
 
@@ -67,25 +68,37 @@ async function applyPlan(race: Race): Promise<PlanResult> {
   return { removed: removedRows?.length ?? 0, added: rows.length, skippedDays, first: dates[0] ?? null, last: dates.at(-1) ?? null, weeks };
 }
 
-export async function addRace(formData: FormData) {
-  const { supabase, userId } = await requireUser();
+/** Reads and validates the race form. Shared by add and edit. Failures go back to `back` with a message. */
+function parseRace(formData: FormData, back: string): RaceFields {
+  const bail = (m: string): never => redirect(`${back}${back.includes("?") ? "&" : "?"}error=${encodeURIComponent(m)}`);
   const name = String(formData.get("name") ?? "").trim();
   const type = String(formData.get("race_type") ?? "");
   const date = String(formData.get("race_date") ?? "");
-  const location = String(formData.get("location") ?? "").trim() || null;
-  const goal = String(formData.get("goal") ?? "").trim() || null;
-
   const priority = String(formData.get("priority") ?? "A");
   const goalRaw = String(formData.get("goal_time") ?? "").trim();
   const goalSec = goalRaw ? parseDuration(goalRaw) : null;
-  if (goalRaw && goalSec === null) fail("Goal time should look like 1:20:00 or 80 (minutes).");
-  if (!name) fail("Give the race a name.");
-  if (!RACE_TYPES.some((t) => t.value === type)) fail("Pick a race type.");
-  if (!isIsoDate(date)) fail("Pick the race date.");
+  if (goalRaw && goalSec === null) bail("Goal time should look like 1:20:00 or 80 (minutes).");
+  if (!name) bail("Give the race a name.");
+  if (!RACE_TYPES.some((t) => t.value === type)) bail("Pick a race type.");
+  if (!isIsoDate(date)) bail("Pick the race date.");
+  return {
+    name,
+    race_type: type as RaceType,
+    race_date: date,
+    location: String(formData.get("location") ?? "").trim() || null,
+    goal: String(formData.get("goal") ?? "").trim() || null,
+    priority: (["A", "B", "C"].includes(priority) ? priority : "B") as Race["priority"],
+    goal_time_sec: goalSec,
+  };
+}
+
+export async function addRace(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const fields = parseRace(formData, "/races");
 
   const { data, error } = await supabase
     .from("races")
-    .insert({ user_id: userId, name, race_type: type as RaceType, race_date: date, location, goal, priority: ["A", "B", "C"].includes(priority) ? priority : "B", goal_time_sec: goalSec })
+    .insert({ user_id: userId, ...fields })
     .select("*")
     .single<Race>();
   if (error || !data) fail(error?.message ?? "Could not save the race.");
@@ -94,6 +107,48 @@ export async function addRace(formData: FormData) {
 
   revalidatePath("/", "layout");
   redirect(flash("/races", result ? planSummary(result, "built") : "Race added. No plan built yet."));
+}
+
+/**
+ * Edit a race after creating it. Moving the date, type or priority offers a plan rebuild (on by default). Completed
+ * sessions and your own sessions are never touched. Without a rebuild, generated sessions that would fall after a
+ * new, earlier race day are removed so nothing is planned past the race.
+ */
+export async function updateRace(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const back = `/races/${id}/edit`;
+  const { data: before } = await supabase.from("races").select("*").eq("id", id).maybeSingle<Race>();
+  if (!before) fail("Race not found.");
+  const fields = parseRace(formData, back);
+  const changes = raceChanges(before, fields);
+  if (changes.length === 0) redirect(flash(`/races/${id}`, "No changes to save."));
+
+  const { data: after, error } = await supabase.from("races").update(fields).eq("id", id).select("*").single<Race>();
+  if (error || !after) redirect(`${back}?error=${encodeURIComponent(error?.message ?? "Could not save the race.")}`);
+
+  const today = await getToday();
+  const lines = [`Saved. ${changes.map((c) => c.text).join("; ")}.`];
+  if (affectsPlan(changes)) {
+    if (after.race_date < today) {
+      lines.push("The race date is in the past, so the plan was not rebuilt.");
+    } else if (formData.get("rebuild") === "on") {
+      lines.push(planSummary(await applyPlan(after), "rebuilt"));
+    } else {
+      const { data: gone } = await supabase
+        .from("workouts")
+        .delete()
+        .eq("race_id", id)
+        .eq("generated", true)
+        .eq("status", "planned")
+        .gt("workout_date", after.race_date)
+        .select("id");
+      const n = gone?.length ?? 0;
+      lines.push(n ? `Removed ${n} planned session${n === 1 ? "" : "s"} that fell after the new race day. The rest of the plan is unchanged; use Rebuild plan to re-plan it.` : "The plan was left as is. Use Rebuild plan to re-plan it.");
+    }
+  }
+  revalidatePath("/", "layout");
+  redirect(flash(`/races/${id}`, lines.join(" ")));
 }
 
 export async function regeneratePlan(formData: FormData) {

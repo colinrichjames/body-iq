@@ -101,7 +101,10 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
               <p className="mt-3 text-sm text-zinc-400">
                 {n > 0 ? `${n} planned sessions left${phase ? `, ${phase} phase` : ""}.` : "No plan generated yet."}
               </p>
-              <div className="mt-3 flex gap-2">
+              <div className="mt-3 flex items-center gap-2">
+                <Link href={`/races/${r.id}/edit`} className={`${btnGhost} px-3 py-2 text-sm`}>
+                  Edit
+                </Link>
                 <form action={regeneratePlan}>
                   <input type="hidden" name="id" value={r.id} />
                   {n > 0 ? (
