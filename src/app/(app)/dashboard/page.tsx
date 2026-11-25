@@ -133,7 +133,7 @@ export default async function DashboardPage() {
             : "not connected yet"}{" "}
           {!lastSync && (
             <Link href="/connect" className="text-emerald-400">
-              Set up
+              Connect
             </Link>
           )}
         </p>

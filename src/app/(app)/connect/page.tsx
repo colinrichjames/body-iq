@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { diffDays, formatDay } from "@/lib/dates";
+import { getToday } from "@/lib/today";
 import type { SyncRun } from "@/lib/types";
-import { card } from "@/components/ui";
+import { btnGhost, btnPrimary, card, field } from "@/components/ui";
+import { connectGarmin, disconnectGarmin } from "./actions";
 
 const KEY_PAGE = "https://connect.garmin.com/app/settings/personalApiToken";
 
@@ -41,14 +44,8 @@ const STEPS = [
     ),
   },
   {
-    title: "Add it to Body IQ as a secret",
-    body: (
-      <>
-        In Supabase, open your project, then Edge Functions, then Secrets. Add a secret named{" "}
-        <code className="rounded bg-zinc-800 px-1.5 py-0.5 text-sm">GARMIN_API_KEY</code> with the key as the value. The key lives only on the server and is never sent to your
-        browser.
-      </>
-    ),
+    title: "Paste it below",
+    body: <>Paste the key into the form on this page and choose the same expiry you picked in Garmin. Body IQ checks it with Garmin, then stores it on the server. It can&apos;t be shown again and never goes back to your browser.</>,
   },
   {
     title: "Link MyFitnessPal to Garmin (optional)",
@@ -61,8 +58,12 @@ const STEPS = [
   },
 ];
 
-export default async function ConnectPage() {
+export default async function ConnectPage({ searchParams }: { searchParams: Promise<{ error?: string; notice?: string }> }) {
+  const { error, notice } = await searchParams;
   const { supabase } = await requireUser();
+  const today = await getToday();
+  const { data: conn } = await supabase.from("garmin_connections").select("*").maybeSingle<{ key_last4: string; expires_on: string; verified: boolean }>();
+  const daysLeft = conn ? diffDays(today, conn.expires_on) : null;
   const { data } = await supabase.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(1).returns<SyncRun[]>();
   const last = data?.[0] ?? null;
 
@@ -77,16 +78,65 @@ export default async function ConnectPage() {
         workouts to your watch.
       </p>
 
+      {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {notice && <p className="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</p>}
+
+      {conn ? (
+        <section className={`${card} mt-5 text-sm`}>
+          <p className="font-medium text-emerald-400">Garmin key saved</p>
+          <p className="mt-1 text-zinc-400">
+            Ends in {conn.key_last4}. {conn.verified ? "Verified with Garmin." : "Not yet verified with Garmin."}
+          </p>
+          <p className={`mt-1 ${daysLeft !== null && daysLeft <= 14 ? "text-amber-400" : "text-zinc-400"}`}>
+            {daysLeft !== null && daysLeft < 0
+              ? `Expired ${formatDay(conn.expires_on, { weekday: false, year: true })}. Create a new key and paste it below.`
+              : `Expires ${formatDay(conn.expires_on, { weekday: false, year: true })} (${daysLeft} days).`}
+          </p>
+          <form action={disconnectGarmin} className="mt-3">
+            <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
+              Disconnect and delete key
+            </button>
+          </form>
+        </section>
+      ) : null}
+
+      <form action={connectGarmin} className={`${card} mt-5 space-y-3`}>
+        <h2 className="font-medium">{conn ? "Replace key" : "Add your Garmin key"}</h2>
+        <input
+          name="api_key"
+          type="password"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          required
+          placeholder="Paste your Garmin personal API key"
+          className={field}
+        />
+        <label className="block text-sm text-zinc-400">
+          Expiry you chose in Garmin
+          <select name="expiry_days" defaultValue="365" className={`${field} mt-1`}>
+            <option value="365">365 days (recommended)</option>
+            <option value="180">180 days</option>
+            <option value="90">90 days</option>
+            <option value="30">30 days</option>
+          </select>
+        </label>
+        <button type="submit" className={`${btnPrimary} w-full`}>
+          Save and verify
+        </button>
+      </form>
+
       <section className={`${card} mt-5 text-sm`}>
         <p className="text-zinc-400">Status</p>
         <p className="mt-1">
           {last
             ? `Last sync ${last.status}: ${new Date(last.finished_at ?? last.started_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${last.error ? ` (${last.error})` : ""}`
-            : "Not connected yet. Follow the steps below. The sync itself is the next thing to be built."}
+            : "No syncs yet. Once your key is saved, the sync itself is the next thing to be built."}
         </p>
       </section>
 
-      <ol className="mt-5 space-y-4">
+      <h2 className="mt-8 text-sm text-zinc-400">How to get the key</h2>
+      <ol className="mt-3 space-y-4">
         {STEPS.map((s, i) => (
           <li key={s.title} className="flex gap-3">
             <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-sm font-medium text-emerald-400">{i + 1}</span>
