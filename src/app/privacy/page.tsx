@@ -27,6 +27,7 @@ export default function PrivacyPage() {
           <li>Food you log and your calorie and macro targets.</li>
           <li>If you connect Garmin: your activities, sleep, HRV, Body Battery, resting heart rate, stress and steps.</li>
           <li>Settings such as your unit preference and your time zone.</li>
+          <li>On your phone: your in-progress workout, and a copy of pages you opened so they load without signal. Signing out clears the saved pages.</li>
         </ul>
       </Section>
 
