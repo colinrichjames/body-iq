@@ -1,3 +1,4 @@
+import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { diffDays, formatDay } from "@/lib/dates";
@@ -111,9 +112,9 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
               </button>
             </form>
             <form action={disconnectGarmin}>
-              <button type="submit" className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
+              <ConfirmButton message="Disconnect Garmin? Your key is deleted from Body IQ and can't be restored. You'd need to paste it again." className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
                 Disconnect
-              </button>
+              </ConfirmButton>
             </form>
           </div>
         </section>

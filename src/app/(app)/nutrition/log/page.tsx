@@ -1,3 +1,4 @@
+import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { addDays, formatDay, isIsoDate } from "@/lib/dates";
@@ -116,9 +117,9 @@ export default async function FoodLogPage({ searchParams }: { searchParams: Prom
                   <form action={deleteFoodEntry}>
                     <input type="hidden" name="id" value={e.id} />
                     <input type="hidden" name="day" value={day} />
-                    <button type="submit" className="px-2 py-1 text-xs text-zinc-500 active:text-red-400">
+                    <ConfirmButton message={`Remove ${e.name}? You can undo right after.`} className="px-2 py-1 text-xs text-zinc-500 active:text-red-400">
                       Remove
-                    </button>
+                    </ConfirmButton>
                   </form>
                 </li>
               ))}

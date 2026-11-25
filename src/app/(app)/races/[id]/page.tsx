@@ -1,3 +1,4 @@
+import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
@@ -169,9 +170,9 @@ export default async function RacePage({
                       <form action={deleteBenchmark}>
                         <input type="hidden" name="id" value={b.id} />
                         <input type="hidden" name="race_id" value={race.id} />
-                        <button type="submit" className="text-zinc-600 active:text-red-400">
+                        <ConfirmButton message="Delete this benchmark? You can undo right after." className="text-zinc-600 active:text-red-400">
                           x
-                        </button>
+                        </ConfirmButton>
                       </form>
                     </span>
                   </li>

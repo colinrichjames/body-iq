@@ -1,3 +1,4 @@
+import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
@@ -244,9 +245,12 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
             <form action={setStatus}>
               <input type="hidden" name="id" value={w.id} />
               <input type="hidden" name="status" value="planned" />
-              <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
+              <ConfirmButton
+                className={`${btnGhost} px-3 py-2 text-sm`}
+                message={inProgress ? "Discard the sets you've logged so far? This can't be undone." : w.status === "completed" ? "Reset this completed workout to planned? Its completed status and results are cleared." : "Reset this workout to planned?"}
+              >
                 {inProgress ? "Discard progress" : "Reset"}
-              </button>
+              </ConfirmButton>
             </form>
           )}
           <form action={moveWorkout} className="flex w-full items-center gap-2">
@@ -274,9 +278,9 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
           </form>
           <form action={deleteWorkout}>
             <input type="hidden" name="id" value={w.id} />
-            <button type="submit" className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
+            <ConfirmButton message={`Delete "${w.title}"? You can undo right after.`} className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
               Delete
-            </button>
+            </ConfirmButton>
           </form>
         </div>
       </div>
