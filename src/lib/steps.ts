@@ -11,12 +11,17 @@ export type Step = {
   restAfter: number;
 };
 
+/** Default rest between sets of the same exercise, and the floor for rest when moving to the next exercise. */
+export const REST_BETWEEN_SETS = 75;
+export const REST_BETWEEN_EXERCISES = 120;
+
 export function buildSteps(w: Workout): Step[] {
   const s = w.structure;
   const ex = s?.exercises ?? [];
   if (!ex.length) return [];
   const steps: Step[] = [];
-  const defaultRest = s?.rest_sec ?? 60;
+  const defaultRest = s?.rest_sec ?? REST_BETWEEN_SETS;
+  const betweenExercises = Math.max(REST_BETWEEN_EXERCISES, defaultRest);
   if (s?.rounds) {
     for (let r = 1; r <= s.rounds; r++) {
       ex.forEach((e, i) => {
@@ -46,7 +51,7 @@ export function buildSteps(w: Workout): Step[] {
           seconds: e.seconds,
           weight: e.weight_lb,
           note: e.note,
-          restAfter: isVeryLast ? 0 : (e.rest_sec ?? defaultRest),
+          restAfter: isVeryLast ? 0 : (e.rest_sec ?? (k === n ? betweenExercises : defaultRest)),
         });
       }
     });

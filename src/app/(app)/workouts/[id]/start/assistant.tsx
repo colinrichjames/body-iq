@@ -11,6 +11,29 @@ import { finishWorkout, saveProgress } from "../../actions";
 
 type Resume = { logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; elapsedMs: number };
 
+const AUTO_KEY = "bodyiq-auto-advance-rest";
+const GO_MS = 3000;
+
+/** Short beep via WebAudio (free, no assets). Silent if the browser blocks audio. */
+function beep() {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 880;
+    gain.gain.value = 0.15;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.25);
+    osc.onended = () => void ctx.close();
+  } catch {
+    // audio unavailable
+  }
+}
+
 const fmt = (totalSec: number) => {
   const s = Math.max(0, Math.round(totalSec));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
@@ -45,6 +68,22 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
   const effNow = pausedAt ?? now;
   const [stepIndex, setStepIndex] = useState(() => Math.min(saved?.stepIndex ?? 0, Math.max(0, steps.length - 1)));
   const [restEnd, setRestEnd] = useState<number | null>(null);
+  // Setting kept on this device (a Settings page can move it to the account later). Default ON.
+  const [autoAdvance, setAutoAdvanceState] = useState(() => {
+    try {
+      return localStorage.getItem(AUTO_KEY) !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const setAutoAdvance = (v: boolean) => {
+    setAutoAdvanceState(v);
+    try {
+      localStorage.setItem(AUTO_KEY, v ? "on" : "off");
+    } catch {
+      // storage unavailable
+    }
+  };
   const [blockIndex, setBlockIndex] = useState(() => Math.min(saved?.blockIndex ?? 0, Math.max(0, blocks.length - 1)));
   const [blockStart, setBlockStart] = useState(() => Date.now());
   const [logs, setLogs] = useState<SetLog[]>(() => saved?.logs ?? []);
@@ -144,13 +183,21 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
   const restLeft = restEnd ? Math.max(0, Math.ceil((restEnd - effNow) / 1000)) : 0;
   const resting = restEnd !== null;
 
-  // Buzz once when rest ends.
+  const overtimeSec = restEnd ? Math.max(0, Math.floor((effNow - restEnd) / 1000)) : 0;
+
+  // At 0:00: beep + vibrate once, then (if auto-advance is on) show GO for 3 s and move on.
   useEffect(() => {
     if (resting && !paused && restLeft === 0 && !buzzed.current) {
       buzzed.current = true;
       navigator.vibrate?.([200, 100, 200]);
+      beep();
     }
   }, [resting, paused, restLeft]);
+  useEffect(() => {
+    if (!autoAdvance || !resting || paused || restLeft !== 0) return;
+    const t = setTimeout(() => setRestEnd(null), GO_MS);
+    return () => clearTimeout(t);
+  }, [autoAdvance, resting, paused, restLeft]);
 
   const goFinish = useCallback(() => {
     setMinutes(String(Math.max(1, Math.round(latest.current.elapsed / 60000))));
@@ -436,11 +483,17 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume }: { wo
       <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
         <Header title={workout.title} elapsed={elapsedSec} onQuit={quit} onPause={pause} />
         <div className="flex flex-1 flex-col items-center justify-center text-center">
-          <p className="text-sm uppercase tracking-widest text-zinc-500">{restLeft === 0 ? "Go" : "Rest"}</p>
-          <p className={`mt-2 text-8xl font-semibold tabular-nums ${restLeft === 0 ? "text-emerald-400" : ""}`}>{fmt(restLeft)}</p>
+          <p className="text-sm uppercase tracking-widest text-zinc-500">{restLeft === 0 ? (autoAdvance ? "Go" : "Rest over") : "Rest"}</p>
+          <p className={`mt-2 text-8xl font-semibold tabular-nums ${restLeft === 0 ? "text-emerald-400" : ""}`}>
+            {restLeft === 0 && !autoAdvance ? `+${fmt(overtimeSec)}` : fmt(restLeft)}
+          </p>
           <p className="mt-6 text-zinc-400">
             Next: {step.exercise}, set {step.setNumber} of {step.totalSets}
           </p>
+          <label className="mt-6 flex items-center gap-2 text-sm text-zinc-400">
+            <input type="checkbox" checked={autoAdvance} onChange={(e) => setAutoAdvance(e.target.checked)} />
+            Auto-advance after rest
+          </label>
         </div>
         {logs.length > 0 && !logs[logs.length - 1].skipped && (
           <div className="mb-3 rounded-xl border border-zinc-800 px-3 py-2 text-sm">
