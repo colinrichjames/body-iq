@@ -1,5 +1,6 @@
 "use server";
 
+import { toTrash, withUndo } from "@/lib/trash";
 import { isUnit, paceProblem, toKm, type DistUnit } from "@/lib/distance";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -83,10 +84,17 @@ export async function setStatus(formData: FormData) {
 }
 
 export async function deleteWorkout(formData: FormData) {
-  const { supabase } = await requireUser();
-  await supabase.from("workouts").delete().eq("id", String(formData.get("id") ?? ""));
+  const { supabase, userId } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const { data: workout } = await supabase.from("workouts").select("*").eq("id", id).maybeSingle<{ id: string; title: string }>();
+  let undo: string | null = null;
+  if (workout) {
+    const { data: sets } = await supabase.from("workout_sets").select("*").eq("workout_id", id);
+    undo = await toTrash(supabase, userId, "workout", workout.title, { workout, sets: sets ?? [] });
+  }
+  await supabase.from("workouts").delete().eq("id", id);
   refresh();
-  redirect("/workouts");
+  redirect(withUndo("/workouts", undo, workout?.title ?? "Workout"));
 }
 
 export type { SetLog };

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { toTrash, withUndo } from "@/lib/trash";
 import { isIsoDate } from "@/lib/dates";
 import { parseDuration } from "@/lib/hyrox";
 import { generatePlan, RACE_TYPES } from "@/lib/plan";
@@ -105,9 +106,12 @@ export async function regeneratePlan(formData: FormData) {
 }
 
 export async function deleteRace(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, userId } = await requireUser();
   const id = String(formData.get("id") ?? "");
   const today = await getToday();
+  const { data: race } = await supabase.from("races").select("*").eq("id", id).maybeSingle<Race>();
+  const { data: planned } = await supabase.from("workouts").select("*").eq("race_id", id).eq("generated", true).eq("status", "planned").gte("workout_date", today);
+  const undo = race ? await toTrash(supabase, userId, "race", race.name, { race, workouts: planned ?? [] }) : null;
   // Remove the unfinished generated sessions; completed history stays (race_id becomes null).
   await supabase.from("workouts").delete().eq("race_id", id).eq("generated", true).eq("status", "planned").gte("workout_date", today);
   const { error } = await supabase.from("races").delete().eq("id", id);
@@ -115,7 +119,7 @@ export async function deleteRace(formData: FormData) {
   revalidatePath("/races");
   revalidatePath("/workouts");
   revalidatePath("/dashboard");
-  redirect("/races");
+  redirect(withUndo("/races", undo, race?.name ?? "Race"));
 }
 
 export async function addBenchmark(formData: FormData) {
@@ -140,11 +144,14 @@ export async function addBenchmark(formData: FormData) {
 }
 
 export async function deleteBenchmark(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, userId } = await requireUser();
   const raceId = String(formData.get("race_id") ?? "");
-  await supabase.from("hyrox_benchmarks").delete().eq("id", String(formData.get("id") ?? ""));
+  const id = String(formData.get("id") ?? "");
+  const { data: benchmark } = await supabase.from("hyrox_benchmarks").select("*").eq("id", id).maybeSingle<{ station: string }>();
+  const undo = benchmark ? await toTrash(supabase, userId, "benchmark", `${benchmark.station} benchmark`, { benchmark, race_id: raceId }) : null;
+  await supabase.from("hyrox_benchmarks").delete().eq("id", id);
   revalidatePath(`/races/${raceId}`);
-  redirect(`/races/${raceId}`);
+  redirect(withUndo(`/races/${raceId}`, undo, benchmark ? `${benchmark.station} benchmark` : "Benchmark"));
 }
 
 export type PlanCsvRow = {

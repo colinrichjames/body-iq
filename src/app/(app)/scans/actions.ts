@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth";
+import { toTrash, withUndo } from "@/lib/trash";
 
 const SOURCES = ["inbody", "dexa", "scale", "manual"] as const;
 
@@ -47,7 +49,9 @@ export async function deleteScan(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
 
-  const supabase = await createClient();
+  const { supabase, userId } = await requireUser();
+  const { data: scan } = await supabase.from("body_scans").select("*").eq("id", id).maybeSingle<{ scanned_at: string }>();
+  const undo = scan ? await toTrash(supabase, userId, "scan", `Scan ${scan.scanned_at.slice(0, 10)}`, { scan }) : null;
   const { error } = await supabase.from("body_scans").delete().eq("id", id);
   if (error) {
     redirect(`/scans?error=${encodeURIComponent(error.message)}`);
@@ -55,4 +59,5 @@ export async function deleteScan(formData: FormData) {
 
   revalidatePath("/scans");
   revalidatePath("/dashboard");
+  redirect(withUndo("/scans", undo, scan ? `Scan ${scan.scanned_at.slice(0, 10)}` : "Scan"));
 }

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { isIsoDate } from "@/lib/dates";
+import { syncFoodDay } from "@/lib/food-sync";
+import { toTrash, withUndo } from "@/lib/trash";
 
 const MEALS = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -28,32 +30,9 @@ export type FoodEntryInput = {
 const ok = (v: unknown, max = 20000) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v < max;
 const opt = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 100000 ? v : null);
 
-/** Rolls the day's entries up into nutrition_days so targets, insights and the dashboard stay in step. */
 async function syncDay(day: string) {
   const { supabase, userId } = await requireUser();
-  const { data } = await supabase.from("food_entries").select("calories,protein_g,carbs_g,fat_g,sodium_mg,sugar_g,fiber_g").eq("day", day);
-  const rows = data ?? [];
-  if (rows.length === 0) {
-    await supabase.from("nutrition_days").delete().eq("day", day).eq("source", "logged");
-    return;
-  }
-  const sum = (k: "calories" | "protein_g" | "carbs_g" | "fat_g" | "sodium_mg" | "sugar_g" | "fiber_g") =>
-    Math.round(rows.reduce((a, r) => a + Number(r[k] ?? 0), 0) * 10) / 10;
-  await supabase.from("nutrition_days").upsert(
-    {
-      user_id: userId,
-      day,
-      calories: sum("calories"),
-      protein_g: sum("protein_g"),
-      carbs_g: sum("carbs_g"),
-      fat_g: sum("fat_g"),
-      sodium_mg: sum("sodium_mg"),
-      sugar_g: sum("sugar_g"),
-      fiber_g: sum("fiber_g"),
-      source: "logged",
-    },
-    { onConflict: "user_id,day" },
-  );
+  await syncFoodDay(supabase, userId, day);
 }
 
 function refresh(day: string) {
@@ -114,14 +93,17 @@ export async function addFoodEntry(input: FoodEntryInput): Promise<{ error: stri
 }
 
 export async function deleteFoodEntry(formData: FormData) {
-  const { supabase } = await requireUser();
+  const { supabase, userId } = await requireUser();
   const id = String(formData.get("id") ?? "");
   const day = String(formData.get("day") ?? "");
+  const { data: entry } = await supabase.from("food_entries").select("*").eq("id", id).maybeSingle<{ name: string }>();
+  const undo = entry ? await toTrash(supabase, userId, "food_entry", entry.name, { entry }) : null;
   await supabase.from("food_entries").delete().eq("id", id);
+  const label = entry?.name ?? "Food";
   if (isIsoDate(day)) {
     await syncDay(day);
     refresh(day);
-    redirect(`/nutrition/log?d=${day}`);
+    redirect(withUndo(`/nutrition/log?d=${day}`, undo, label));
   }
-  redirect("/nutrition/log");
+  redirect(withUndo("/nutrition/log", undo, label));
 }

@@ -1,3 +1,4 @@
+import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -81,9 +82,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             Settings
           </Link>
           <form action={signOut}>
-            <button type="submit" className="text-sm text-zinc-400 active:text-zinc-200">
-              {isGuest ? "Leave guest session" : "Sign out"}
-            </button>
+            {isGuest ? (
+              <ConfirmButton message="Leave the guest session? Everything you entered as a guest is deleted and can't be restored." className="text-sm text-zinc-400 active:text-zinc-200">
+                Leave guest session
+              </ConfirmButton>
+            ) : (
+              <button type="submit" className="text-sm text-zinc-400 active:text-zinc-200">
+                Sign out
+              </button>
+            )}
           </form>
         </div>
       </header>

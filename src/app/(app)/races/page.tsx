@@ -1,3 +1,4 @@
+import { ConfirmButton } from "@/components/confirm-button";
 import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { diffDays, formatDay } from "@/lib/dates";
@@ -101,15 +102,21 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
               <div className="mt-3 flex gap-2">
                 <form action={regeneratePlan}>
                   <input type="hidden" name="id" value={r.id} />
-                  <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
-                    {n > 0 ? "Rebuild plan" : "Generate plan"}
-                  </button>
+                  {n > 0 ? (
+                    <ConfirmButton message="Rebuild the plan? Planned sessions from today on are replaced with a fresh plan. Completed sessions and ones you edited stay." className={`${btnGhost} px-3 py-2 text-sm`}>
+                      Rebuild plan
+                    </ConfirmButton>
+                  ) : (
+                    <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
+                      Generate plan
+                    </button>
+                  )}
                 </form>
                 <form action={deleteRace}>
                   <input type="hidden" name="id" value={r.id} />
-                  <button type="submit" className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
+                  <ConfirmButton message={`Delete ${r.name} and its unfinished planned sessions? You can undo right after.`} className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
                     Delete
-                  </button>
+                  </ConfirmButton>
                 </form>
               </div>
             </li>
@@ -128,9 +135,9 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
                 </span>
                 <form action={deleteRace}>
                   <input type="hidden" name="id" value={r.id} />
-                  <button type="submit" className="text-zinc-600 active:text-red-400">
+                  <ConfirmButton message={`Remove ${r.name}? You can undo right after.`} className="text-zinc-600 active:text-red-400">
                     Remove
-                  </button>
+                  </ConfirmButton>
                 </form>
               </li>
             ))}

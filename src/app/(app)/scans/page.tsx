@@ -1,3 +1,4 @@
+import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { BodyScan } from "@/lib/types";
@@ -98,9 +99,9 @@ export default async function ScansPage({
               </div>
               <form action={deleteScan}>
                 <input type="hidden" name="id" value={s.id} />
-                <button type="submit" className="text-sm text-zinc-500 active:text-red-400">
+                <ConfirmButton message="Delete this scan? You can undo right after." className="text-sm text-zinc-500 active:text-red-400">
                   Delete
-                </button>
+                </ConfirmButton>
               </form>
             </div>
             <dl className="mt-3 grid grid-cols-4 gap-2 text-sm">
