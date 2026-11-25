@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Body IQ",
-  description: "Training, nutrition and recovery in one health score.",
+  description: "Training, nutrition and recovery in one Body IQ score.",
 };
 
 export const viewport: Viewport = {

@@ -8,7 +8,7 @@ All-in-one training and nutrition hub for triathlon and strength training. Pulls
 
 ## What's here
 - `/login`: magic-link sign-in
-- `/dashboard`: latest body scan with change vs. the previous one, plus a placeholder for the unified health score
+- `/dashboard`: latest body scan with change vs. the previous one, plus the Body IQ score
 - `/scans`: log, list and delete body scans (InBody, DEXA, scale, manual)
 - `supabase/migrations/`: schema with RLS (`profiles`, `body_scans`)
 - `src/proxy.ts`: refreshes the session and sends signed-out visitors to `/login` (Next 16 renamed `middleware` to `proxy`)
@@ -60,5 +60,5 @@ Work happens on branches and pull requests. Vercel builds a preview for every PR
 - Garmin export import (activities, sleep, HRV, resting HR)
 - MyFitnessPal CSV import (calories, macros, sodium, sugar)
 - Apple Health import
-- Unified health score (nutrition 20, training 25, recovery 25, body composition 20, activity 10)
+- Body IQ score (nutrition 20, training 25, recovery 25, body composition 20, activity 10)
 - Trainer-facing view that reads client data from the tools they already use

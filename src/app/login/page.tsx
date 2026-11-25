@@ -19,7 +19,7 @@ export default async function LoginPage({
         Body IQ
       </p>
       <h1 className="mt-3 text-3xl font-semibold tracking-tight">
-        Train, fuel and recover with one score.
+        Train, fuel and recover with one Body IQ score.
       </h1>
       <p className="mt-3 text-zinc-400">
         Sign in with your email. We&apos;ll send you a link, no password needed.
