@@ -157,6 +157,13 @@ function cleanOrder(order: string[] | undefined): string[] | null {
   return order.filter((k) => typeof k === "string").slice(0, 500).map((k) => k.slice(0, 160));
 }
 
+function cleanTotals(totals: Record<string, number> | undefined): Record<string, number> | null {
+  if (!totals || typeof totals !== "object") return null;
+  const out: Record<string, number> = {};
+  for (const [name, n] of Object.entries(totals).slice(0, 40)) if (typeof n === "number" && Number.isFinite(n) && n >= 1 && n <= 20) out[name.slice(0, 120)] = Math.round(n);
+  return Object.keys(out).length ? out : null;
+}
+
 /** In-session intake, validated to the database limits. Blank or invalid means not logged. */
 function fuelFields(carbs: unknown, fluid: unknown, sodium: unknown) {
   const n = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
@@ -392,6 +399,7 @@ export async function saveProgress(input: {
   elapsedMs: number;
   blocks?: BlockLog[];
   order?: string[];
+  totals?: Record<string, number>;
 }): Promise<{ error: string | null }> {
   const { supabase, userId } = await requireUser();
   const { data: w } = await supabase.from("workouts").select("status").eq("id", input.id).maybeSingle<{ status: string }>();
@@ -416,7 +424,7 @@ export async function saveProgress(input: {
     .from("workouts")
     .update({
       status: "in_progress",
-      progress: { stepIndex: Math.max(0, Math.round(input.stepIndex)), blockIndex, elapsedMs, updatedAt: new Date().toISOString(), blocks: cleanBlocks(input.blocks) ?? [], ...(cleanOrder(input.order) ? { order: cleanOrder(input.order) } : {}) },
+      progress: { stepIndex: Math.max(0, Math.round(input.stepIndex)), blockIndex, elapsedMs, updatedAt: new Date().toISOString(), blocks: cleanBlocks(input.blocks) ?? [], ...(cleanOrder(input.order) ? { order: cleanOrder(input.order) } : {}), ...(cleanTotals(input.totals) ? { totals: cleanTotals(input.totals) } : {}) },
     })
     .eq("id", input.id);
   if (error) return { error: error.message };

@@ -156,6 +156,22 @@ describe("flexible order", () => {
     expect(screen.getByText(/exercise 2 of 2 · bench/i)).toBeTruthy();
     expect(screen.getByText(/set 2 of 3/i)).toBeTruthy();
   });
+  it("adds and removes sets for the current exercise, never below what is logged", () => {
+    mount(strength);
+    click(/add a set/i);
+    expect(screen.getByText(/set 1 of 4/i)).toBeTruthy();
+    click(/remove a set/i);
+    click(/remove a set/i);
+    click(/remove a set/i);
+    expect(screen.getByText(/set 1 of 1/i)).toBeTruthy();
+    expect((screen.getByRole("button", { name: /remove a set/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((lastSave() as unknown as { totals: Record<string, number> }).totals).toEqual({ Bench: 1 });
+  });
+  it("prefills reps for a station exercise", () => {
+    const stations = { ...hyrox, structure: { blocks: [{ name: "Round x2", detail: "Row 350 m, Wall balls 20. Rest 90 s between rounds." }] } } as unknown as Workout;
+    mount(stations);
+    expect((screen.getByLabelText(/metres/i) as HTMLInputElement).value).toBe("350");
+  });
   it("resumes in the saved order", () => {
     mount(strength, { serverResume: { logs: [], blocks: [], stepIndex: 0, blockIndex: 0, elapsedMs: 0, order: ["Fly#1", "Fly#2", "Bench#1", "Bench#2", "Bench#3"] } });
     expect(screen.getByText(/exercise 1 of 2 · fly/i)).toBeTruthy();

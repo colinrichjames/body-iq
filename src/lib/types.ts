@@ -42,7 +42,7 @@ export type Sport = "strength" | "run" | "bike" | "swim" | "hyrox" | "mobility" 
 export type WorkoutStatus = "planned" | "in_progress" | "completed" | "skipped";
 
 /** Where a half-finished session stands. elapsedMs only counts time the player was open. */
-export type WorkoutProgress = { stepIndex: number; blockIndex: number; elapsedMs: number; updatedAt: string; blocks?: BlockLog[]; /** Order the remaining sets will be done in, as `exercise#set` keys. */ order?: string[] };
+export type WorkoutProgress = { stepIndex: number; blockIndex: number; elapsedMs: number; updatedAt: string; blocks?: BlockLog[]; /** Order the remaining sets will be done in, as `exercise#set` keys. */ order?: string[]; /** Sets per exercise when changed during the session. */ totals?: Record<string, number> };
 
 /** One logged set from the player. A skipped set is kept on purpose so history shows it. */
 export type SetLog = { exercise: string; set_number: number; reps: number | null; weight_lb: number | null; rpe?: number | null; skipped?: boolean };

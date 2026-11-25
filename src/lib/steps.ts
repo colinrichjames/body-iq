@@ -25,13 +25,14 @@ export const REST_BETWEEN_EXERCISES = 120;
  * Every exercise as its own run of sets, so each can be done in any order. A circuit (rounds) becomes
  * straight sets (one per round), and a Hyrox "Round x3" station block becomes one exercise per station.
  */
-export function buildSteps(w: Workout): Step[] {
+export function buildSteps(w: Workout, totals?: Record<string, number> | null): Step[] {
   const s = w.structure;
   let ex = s?.exercises ?? [];
   const rounds = s?.rounds;
   if (rounds && ex.length) ex = ex.map((e) => ({ ...e, sets: rounds }));
   if (!ex.length) ex = circuitOf(s?.blocks)?.exercises ?? [];
   if (!ex.length) return [];
+  if (totals) ex = ex.map((e) => (totals[e.name] ? { ...e, sets: totals[e.name] } : e));
   const steps: Step[] = [];
   const defaultRest = s?.rest_sec ?? REST_BETWEEN_SETS;
   const betweenExercises = Math.max(REST_BETWEEN_EXERCISES, defaultRest);
