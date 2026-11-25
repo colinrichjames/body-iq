@@ -1,5 +1,6 @@
 "use client";
 
+import { useToast } from "@/components/toast";
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { btnGhost, btnPrimary, card, field } from "@/components/ui";
@@ -18,6 +19,7 @@ function defaultMeal(): (typeof MEALS)[number] {
 
 export function FoodAdder({ day, recents }: { day: string; recents: Recent[] }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [meal, setMeal] = useState<(typeof MEALS)[number]>(defaultMeal);
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Food[]>([]);
@@ -87,6 +89,7 @@ export function FoodAdder({ day, recents }: { day: string; recents: Recent[] }) 
     });
     setSaving(false);
     if (res.error) return setNote(res.error);
+    toast(`Added ${picked.name}.`);
     setPicked(null);
     setResults([]);
     setQ("");
@@ -96,7 +99,10 @@ export function FoodAdder({ day, recents }: { day: string; recents: Recent[] }) 
   async function reAdd(r: Recent) {
     const res = await addFoodEntry({ day, meal, name: r.name, brand: r.brand, calories: r.calories, protein_g: r.protein_g, carbs_g: r.carbs_g, fat_g: r.fat_g, amountLabel: "again" });
     if (res.error) setNote(res.error);
-    else router.refresh();
+    else {
+      toast(`Added ${r.name}.`);
+      router.refresh();
+    }
   }
 
   async function submitManual(form: FormData) {
@@ -119,6 +125,7 @@ export function FoodAdder({ day, recents }: { day: string; recents: Recent[] }) 
     });
     setSaving(false);
     if (res.error) return setNote(res.error);
+    toast(`Added ${String(form.get("name") ?? "food")}.`);
     setManual(null);
     setNote(null);
     router.refresh();

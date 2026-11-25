@@ -1,5 +1,6 @@
 "use server";
 
+import { flash } from "@/lib/flash";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -40,9 +41,8 @@ export async function addScan(formData: FormData) {
     redirect(`/scans?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/scans");
-  revalidatePath("/dashboard");
-  redirect("/scans");
+  revalidatePath("/", "layout");
+  redirect(flash("/scans", "Scan saved."));
 }
 
 export async function deleteScan(formData: FormData) {
@@ -57,7 +57,6 @@ export async function deleteScan(formData: FormData) {
     redirect(`/scans?error=${encodeURIComponent(error.message)}`);
   }
 
-  revalidatePath("/scans");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   redirect(withUndo("/scans", undo, scan ? `Scan ${scan.scanned_at.slice(0, 10)}` : "Scan"));
 }

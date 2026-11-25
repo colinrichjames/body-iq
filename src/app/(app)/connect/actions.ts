@@ -56,8 +56,7 @@ export async function connectGarmin(formData: FormData) {
     back("error", "Couldn't save the connection. Try again.");
   }
 
-  revalidatePath("/connect");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   back(
     "notice",
     result === "valid" ? "Garmin key verified and saved." : "Key saved, but Garmin didn't confirm it just now. It will be checked on the first sync.",
@@ -68,8 +67,7 @@ export async function disconnectGarmin() {
   const { supabase, userId } = await requireUser();
   await supabase.from("garmin_credentials").delete().eq("user_id", userId);
   await supabase.from("garmin_connections").delete().eq("user_id", userId);
-  revalidatePath("/connect");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   back("notice", "Garmin disconnected and the key was deleted from Body IQ. Delete it in Garmin Connect too if you won't reuse it.");
 }
 
@@ -102,8 +100,7 @@ export async function syncGarmin(formData: FormData) {
     result = { error: "The sync took too long or couldn't be reached. Check the sync details below and try again." };
   }
 
-  revalidatePath("/connect");
-  revalidatePath("/dashboard");
+  revalidatePath("/", "layout");
   if (result.error) back("error", result.error);
   const failed = result.failed?.length ? ` Unavailable: ${result.failed.join(", ")}.` : "";
   back("notice", `Synced ${result.days ?? 0} days and ${result.activities ?? 0} activities.${failed}`);

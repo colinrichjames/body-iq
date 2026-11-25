@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useToast } from "@/components/toast";
 import { useCallback, useState } from "react";
 import { formatDay } from "@/lib/dates";
 import { SPORT_NAME } from "@/lib/sport";
@@ -12,7 +14,15 @@ export type BoardWorkout = { id: string; date: string; title: string; sport: str
 
 /** Week list with drag-and-drop: grab the handle on a session and drop it on another day. */
 export function WeekBoard({ days, today, workouts }: { days: string[]; today: string; workouts: BoardWorkout[] }) {
+  const router = useRouter();
+  const { toast } = useToast();
   const [items, setItems] = useState(workouts);
+  // When the server sends fresh data (after a save, delete or refresh), show it instead of the old local copy.
+  const [seen, setSeen] = useState(workouts);
+  if (workouts !== seen) {
+    setSeen(workouts);
+    setItems(workouts);
+  }
   const [error, setError] = useState<string | null>(null);
 
   const move = useCallback(async (id: string, day: string) => {
@@ -24,9 +34,13 @@ export function WeekBoard({ days, today, workouts }: { days: string[]; today: st
     const res = await rescheduleWorkout(id, day);
     if (res.error) {
       setError(res.error);
+      toast(res.error, "error");
       setItems((cur) => cur.map((w) => (w.id === id && prev ? { ...w, date: prev } : w)));
+    } else {
+      toast(`Moved to ${formatDay(day, { weekday: true })}.`);
+      router.refresh();
     }
-  }, [items]);
+  }, [items, router, toast]);
   const { grip, over, dragging, ghost } = useDragMove(move);
 
   return (

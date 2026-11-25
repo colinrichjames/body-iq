@@ -1,5 +1,6 @@
 "use client";
 
+import { useToast } from "@/components/toast";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { BlockLog, SetLog, Workout } from "@/lib/types";
@@ -44,6 +45,8 @@ const fmt = (totalSec: number) => {
 
 export function Assistant({ workout, lastWeights, lastTime, serverResume, targets = {}, targetRace = null, lastVolume = {}, lastEndurance = null, plannedDistanceKm = null, distanceUnit = "mi" }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; serverResume: Resume | null; targets?: Record<string, number>; targetRace?: string | null; lastVolume?: Record<string, number>; lastEndurance?: { date: string; km: number | null; minutes: number | null } | null; plannedDistanceKm?: number | null; distanceUnit?: DistUnit }) {
   const router = useRouter();
+  const { toast } = useToast();
+  const warned = useRef(false);
   const steps = useMemo(() => buildSteps(workout), [workout]);
   const blocks = workout.structure?.blocks ?? [];
   const mode: "sets" | "blocks" | "timer" = steps.length ? "sets" : blocks.length ? "blocks" : "timer";
@@ -174,9 +177,18 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
   const persist = useCallback(
     (over?: Partial<{ logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number }>) => {
       const l = latest.current;
-      return saveProgress({ id: workout.id, sets: over?.logs ?? l.logs, blocks: over?.blocks ?? l.blocks, stepIndex: over?.stepIndex ?? l.stepIndex, blockIndex: over?.blockIndex ?? l.blockIndex, elapsedMs: l.elapsed }).catch(() => ({ error: "offline" }));
+      return saveProgress({ id: workout.id, sets: over?.logs ?? l.logs, blocks: over?.blocks ?? l.blocks, stepIndex: over?.stepIndex ?? l.stepIndex, blockIndex: over?.blockIndex ?? l.blockIndex, elapsedMs: l.elapsed })
+        .catch(() => ({ error: "offline" }))
+        .then((res) => {
+          // Tell the user once per outage; the draft stays on this phone and the next save retries.
+          if (res.error && !warned.current) {
+            warned.current = true;
+            toast("Couldn't save to the server. Your progress is kept on this phone and will retry.", "error");
+          } else if (!res.error) warned.current = false;
+          return res;
+        });
     },
-    [workout.id],
+    [workout.id, toast],
   );
   useEffect(() => {
     const onHide = () => document.visibilityState === "hidden" && void persist();
