@@ -3,7 +3,8 @@ import { requireUser } from "@/lib/auth";
 import Link from "next/link";
 import { diffDays, formatDay } from "@/lib/dates";
 import { fmtTime } from "@/lib/hyrox";
-import { currentPhase, RACE_TYPES, raceLabel } from "@/lib/plan";
+import { RACE_TYPES, raceLabel } from "@/lib/plan";
+import { phaseInfo, planStarts } from "@/lib/race-phase";
 import { getToday } from "@/lib/today";
 import type { Race } from "@/lib/types";
 import { btnGhost, btnPrimary, card, field } from "@/components/ui";
@@ -28,6 +29,9 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
     .not("race_id", "is", null);
   const remaining = new Map<string, number>();
   for (const w of counts ?? []) remaining.set(w.race_id as string, (remaining.get(w.race_id as string) ?? 0) + 1);
+
+  const { data: planRows } = await supabase.from("workouts").select("race_id,workout_date,created_at").eq("generated", true).not("race_id", "is", null).returns<{ race_id: string; workout_date: string; created_at: string }[]>();
+  const starts = planStarts(planRows ?? []);
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -74,7 +78,7 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
       <ul className="mt-2 space-y-3">
         {upcoming.map((r) => {
           const days = diffDays(today, r.race_date);
-          const phase = currentPhase(r.race_type, r.race_date, today);
+          const phase = phaseInfo(r.race_type, r.race_date, today, starts.get(r.id) ?? null);
           const n = remaining.get(r.id) ?? 0;
           return (
             <li key={r.id} className={card}>
@@ -99,7 +103,7 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
                 </div>
               </div>
               <p className="mt-3 text-sm text-zinc-400">
-                {n > 0 ? `${n} planned sessions left${phase ? `, ${phase} phase` : ""}.` : "No plan generated yet."}
+                {n > 0 ? `${n} planned sessions left${phase ? `. ${phase.text}` : ""}.` : "No plan generated yet."}
               </p>
               <div className="mt-3 flex items-center gap-2">
                 <Link href={`/races/${r.id}/edit`} className={`${btnGhost} px-3 py-2 text-sm`}>

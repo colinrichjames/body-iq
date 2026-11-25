@@ -4,7 +4,10 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { diffDays, formatDay } from "@/lib/dates";
 import { BENCHMARK_KEYS, fmtTime, hyroxSplits, isHyrox, STATIONS } from "@/lib/hyrox";
-import { currentPhase, raceLabel } from "@/lib/plan";
+import { raceLabel } from "@/lib/plan";
+import { phaseInfo, planStartFrom } from "@/lib/race-phase";
+import { raceDayCard } from "@/lib/race-day";
+import { benchmarkRows, fmtDelta } from "@/lib/benchmarks";
 import { getToday } from "@/lib/today";
 import type { HyroxBenchmark, Race } from "@/lib/types";
 import { btnGhost, card, field } from "@/components/ui";
@@ -32,16 +35,23 @@ export default async function RacePage({
     : { data: [] as HyroxBenchmark[] };
   const benchmarks = bm ?? [];
   const days = diffDays(today, race.race_date);
-  const phase = currentPhase(race.race_type, race.race_date, today);
+  const { data: planRows } = await supabase.from("workouts").select("workout_date,created_at").eq("race_id", id).eq("generated", true).returns<{ workout_date: string; created_at: string }[]>();
+  const phase = phaseInfo(race.race_type, race.race_date, today, planStartFrom(planRows ?? []));
+  const { data: latestScan } = await supabase.from("body_scans").select("weight_lb").not("weight_lb", "is", null).order("scanned_at", { ascending: false }).limit(1).maybeSingle<{ weight_lb: number }>();
+  const dayCard = raceDayCard(race, today, latestScan?.weight_lb ? Number(latestScan.weight_lb) * 0.45359237 : null);
   const plan = race.goal_time_sec && hyrox ? hyroxSplits(race.goal_time_sec) : null;
   const targetByStation = new Map(plan?.splits.filter((s) => s.key).map((s) => [s.key!, s.sec]));
   const runTarget = plan ? plan.runSec / 8 : null;
 
-  const latest = new Map<string, HyroxBenchmark>();
-  const best = new Map<string, number>();
-  for (const b of benchmarks) {
-    if (!latest.has(b.station)) latest.set(b.station, b);
-    best.set(b.station, Math.min(best.get(b.station) ?? Infinity, b.time_sec));
+  const targets = new Map<string, number | null>(BENCHMARK_KEYS.map((k) => [k.key, k.key === "run_1km" ? runTarget : (targetByStation.get(k.key) ?? null)]));
+  const rows = benchmarkRows(BENCHMARK_KEYS.map((k) => k.key), benchmarks, targets);
+  // Change against the effort before it, per entry, for the log below.
+  const prevOf = new Map<string, number>();
+  for (const k of BENCHMARK_KEYS) {
+    const own = benchmarks.filter((b) => b.station === k.key);
+    own.forEach((b, i) => {
+      if (own[i + 1]) prevOf.set(b.id, b.time_sec - own[i + 1].time_sec);
+    });
   }
 
   return (
@@ -58,12 +68,48 @@ export default async function RacePage({
         {race.location ? ` · ${race.location}` : ""}
       </p>
       <p className="mt-2 text-sm text-zinc-300">
-        {days >= 0 ? `${days} days to go${phase ? `, ${phase} phase` : ""}.` : "Race complete."}
+        {days >= 0 ? `${days} days to go.` : "Race complete."}
         {race.goal_time_sec ? ` Goal ${fmtTime(race.goal_time_sec)}.` : ""}
       </p>
+      {phase && (
+        <div className="mt-3 rounded-xl border border-zinc-800 px-3 py-2">
+          <p className="text-sm font-medium text-emerald-400">{phase.text}</p>
+          <p className="mt-0.5 text-sm text-zinc-400">{phase.blurb}</p>
+        </div>
+      )}
       <Link href={`/races/${race.id}/edit`} className="mt-3 inline-block rounded-xl border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 active:bg-zinc-800">
         Edit race
       </Link>
+      {dayCard && (
+        <section className={`${card} mt-4 border-emerald-900`} aria-label="Race day plan">
+          <h2 className="font-medium text-emerald-400">{dayCard.heading}</h2>
+          {[
+            ["Pacing", dayCard.pacing],
+            ["Fuel and fluids during", dayCard.fuel],
+            ["Eating before", dayCard.before],
+          ].map(([title, lines]) => (
+            <div key={title as string} className="mt-3">
+              <h3 className="text-xs uppercase tracking-wider text-zinc-500">{title as string}</h3>
+              <ul className="mt-1 space-y-1 text-sm text-zinc-300">
+                {(lines as string[]).map((l) => (
+                  <li key={l}>{l}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <div className="mt-3">
+            <h3 className="text-xs uppercase tracking-wider text-zinc-500">Pack and check</h3>
+            <ul className="mt-1 space-y-1 text-sm text-zinc-300">
+              {dayCard.checklist.map((l) => (
+                <li key={l} className="flex gap-2">
+                  <span aria-hidden className="text-zinc-600">&#9633;</span>
+                  {l}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )}
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
 
       {hyrox && (
@@ -116,28 +162,32 @@ export default async function RacePage({
                 <tr>
                   <th className="py-1 font-normal">Station</th>
                   <th className="py-1 text-right font-normal">Latest</th>
-                  <th className="py-1 text-right font-normal">Best</th>
-                  <th className="py-1 text-right font-normal">Target</th>
+                  <th className="py-1 text-right font-normal">vs last</th>
+                  <th className="py-1 text-right font-normal">vs target</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-900">
-                {BENCHMARK_KEYS.map((k) => {
-                  const l = latest.get(k.key);
-                  const target = k.key === "run_1km" ? runTarget : (targetByStation.get(k.key) ?? null);
-                  const onTrack = l && target ? l.time_sec <= target : null;
+                {rows.map((r) => {
+                  const label = BENCHMARK_KEYS.find((k) => k.key === r.key)?.label;
+                  const tone = (n: number | null) => (n === null || Math.abs(n) < 1 ? "text-zinc-500" : n < 0 ? "text-emerald-400" : "text-amber-400");
                   return (
-                    <tr key={k.key}>
-                      <td className="py-1.5">{k.label}</td>
-                      <td className={`py-1.5 text-right ${onTrack === null ? "" : onTrack ? "text-emerald-400" : "text-amber-400"}`}>
-                        {l ? fmtTime(l.time_sec) : "--"}
+                    <tr key={r.key}>
+                      <td className="py-1.5">
+                        {label}
+                        <span className="block text-xs text-zinc-500">
+                          {r.target ? `target ${fmtTime(r.target)}` : "no target"}
+                          {r.best !== null ? ` · best ${fmtTime(r.best)}` : ""}
+                        </span>
                       </td>
-                      <td className="py-1.5 text-right text-zinc-400">{best.has(k.key) ? fmtTime(best.get(k.key)!) : "--"}</td>
-                      <td className="py-1.5 text-right text-zinc-500">{target ? fmtTime(target) : "--"}</td>
+                      <td className={`py-1.5 text-right ${r.vsTarget === null ? "" : r.vsTarget <= 0 ? "text-emerald-400" : "text-amber-400"}`}>{r.latest ? fmtTime(r.latest.time_sec) : "--"}</td>
+                      <td className={`py-1.5 text-right ${tone(r.vsPrevious)}`}>{r.vsPrevious === null ? "--" : fmtDelta(r.vsPrevious)}</td>
+                      <td className={`py-1.5 text-right ${tone(r.vsTarget)}`}>{r.vsTarget === null ? "--" : fmtDelta(r.vsTarget)}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            <p className="mt-2 text-xs text-zinc-500">Green is faster, amber is slower. &quot;vs last&quot; compares with your previous effort at that station.</p>
 
             <form action={addBenchmark} className="mt-4 space-y-3 border-t border-zinc-800 pt-4">
               <input type="hidden" name="race_id" value={race.id} />
@@ -170,6 +220,9 @@ export default async function RacePage({
                       </span>
                     </span>
                     <span className="flex items-center gap-3 tabular-nums">
+                      {prevOf.has(b.id) && (
+                        <span className={`text-xs ${Math.abs(prevOf.get(b.id)!) < 1 ? "text-zinc-500" : prevOf.get(b.id)! < 0 ? "text-emerald-400" : "text-amber-400"}`}>{fmtDelta(prevOf.get(b.id)!)}</span>
+                      )}
                       {fmtTime(b.time_sec)}
                       <form action={deleteBenchmark}>
                         <input type="hidden" name="id" value={b.id} />

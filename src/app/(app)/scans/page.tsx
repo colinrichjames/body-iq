@@ -2,6 +2,8 @@ import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { BodyScan } from "@/lib/types";
+import { TrendChart } from "@/components/trend-chart";
+import { fmtChange, lastChange, SCAN_METRICS, trendPoints } from "@/lib/scan-trends";
 import { addScan, deleteScan } from "./actions";
 
 const field =
@@ -79,12 +81,26 @@ export default async function ScansPage({
         )}
       </form>
 
+      <section className="mt-8 space-y-3" aria-label="Trends">
+        <h2 className="font-medium">Trends</h2>
+        {scans.length === 0 ? (
+          <p className="text-sm text-zinc-500">Charts appear once you log scans.</p>
+        ) : (
+          <div className="grid gap-3">
+            {SCAN_METRICS.map((m) => (
+              <TrendChart key={m.key} label={m.label} unit={m.unit} good={m.good} points={trendPoints(scans, m.key)} />
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="mt-8 space-y-3">
         <h2 className="font-medium">History</h2>
         {scans.length === 0 && (
           <p className="text-sm text-zinc-500">No scans yet. Log your first one above.</p>
         )}
-        {scans.map((s) => (
+        {scans.map((s, idx) => (
+          // History is newest first, so the older neighbour is the previous scan.
           <article key={s.id} className="rounded-2xl border border-zinc-800 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -105,10 +121,12 @@ export default async function ScansPage({
               </form>
             </div>
             <dl className="mt-3 grid grid-cols-4 gap-2 text-sm">
-              <Stat label="Weight" value={s.weight_lb} unit="lb" />
-              <Stat label="Body fat" value={s.body_fat_pct} unit="%" />
-              <Stat label="Muscle" value={s.skeletal_muscle_lb} unit="lb" />
-              <Stat label="Fat mass" value={s.fat_mass_lb} unit="lb" />
+              {SCAN_METRICS.map((m) => {
+                const prev = scans.slice(idx + 1).find((o) => o[m.key] !== null)?.[m.key] ?? null;
+                const cur = s[m.key];
+                const change = cur !== null && prev !== null ? lastChange([{ date: "", value: Number(prev) }, { date: "", value: Number(cur) }]) : null;
+                return <Stat key={m.key} label={m.key === "skeletal_muscle_lb" ? "Muscle" : m.label} value={cur} unit={m.unit} change={change} good={m.good} />;
+              })}
             </dl>
             {s.notes && <p className="mt-3 text-sm text-zinc-400">{s.notes}</p>}
           </article>
@@ -118,7 +136,8 @@ export default async function ScansPage({
   );
 }
 
-function Stat({ label, value, unit }: { label: string; value: number | null; unit: string }) {
+function Stat({ label, value, unit, change, good }: { label: string; value: number | null; unit: string; change: number | null; good: "down" | "up" | "either" }) {
+  const tone = change === null || change === 0 || good === "either" ? "text-zinc-500" : (change < 0) === (good === "down") ? "text-emerald-400" : "text-amber-400";
   return (
     <div>
       <dt className="text-xs text-zinc-500">{label}</dt>
@@ -126,6 +145,7 @@ function Stat({ label, value, unit }: { label: string; value: number | null; uni
         {value === null ? "--" : unit === "%" ? `${value}%` : value}
       </dd>
       {value !== null && unit !== "%" && <span className="text-xs text-zinc-500">{unit}</span>}
+      {change !== null && change !== 0 && <p className={`text-xs tabular-nums ${tone}`}>{fmtChange(change, unit).replace(" lb", "")}</p>}
     </div>
   );
 }
