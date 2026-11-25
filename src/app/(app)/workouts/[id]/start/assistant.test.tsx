@@ -133,6 +133,43 @@ describe("player context", () => {
   });
 });
 
+describe("flexible order", () => {
+  it("Do later moves the exercise to the end and the next one starts, with its own sets", () => {
+    mount(strength);
+    click(/do later/i);
+    expect(screen.getByText(/exercise 1 of 2 · fly/i)).toBeTruthy();
+    expect(screen.getByText(/set 1 of 2/i)).toBeTruthy();
+    expect((lastSave() as unknown as { order: string[] }).order).toEqual(["Fly#1", "Fly#2", "Bench#1", "Bench#2", "Bench#3"]);
+  });
+  it("can jump to another exercise from the list and come back to the first", () => {
+    mount(strength);
+    click(/done set/i);
+    click(/skip rest/i);
+    click(/exercise 1 of 2/i);
+    click(/do fly next/i);
+    expect(screen.getByText(/set 1 of 2/i)).toBeTruthy();
+    click(/done set/i);
+    click(/skip rest/i);
+    click(/done set/i);
+    click(/skip rest/i);
+    // Fly finished; Bench resumes at set 2 (set 1 was logged before the switch).
+    expect(screen.getByText(/exercise 2 of 2 · bench/i)).toBeTruthy();
+    expect(screen.getByText(/set 2 of 3/i)).toBeTruthy();
+  });
+  it("resumes in the saved order", () => {
+    mount(strength, { serverResume: { logs: [], blocks: [], stepIndex: 0, blockIndex: 0, elapsedMs: 0, order: ["Fly#1", "Fly#2", "Bench#1", "Bench#2", "Bench#3"] } });
+    expect(screen.getByText(/exercise 1 of 2 · fly/i)).toBeTruthy();
+  });
+  it("splits a Hyrox station block into exercises you can log one by one", () => {
+    const stations = { ...hyrox, structure: { blocks: [{ name: "Round x2", detail: "Row 350 m, Wall balls 20. Rest 90 s between rounds." }] } } as unknown as Workout;
+    mount(stations);
+    expect(screen.getByText(/exercise 1 of 2 · row/i)).toBeTruthy();
+    expect(screen.getByText(/metres/i)).toBeTruthy();
+    click(/do later/i);
+    expect(screen.getByText(/exercise 1 of 2 · wall balls/i)).toBeTruthy();
+  });
+});
+
 describe("rest timer", () => {
   it("auto-advances about 3 s after rest ends (default on)", () => {
     mount(strength);
