@@ -42,6 +42,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       </section>
 
       <section className={`${card} mt-5`}>
+        <h2 className="font-medium">Privacy</h2>
+        <p className="mt-1 text-sm text-zinc-400">What Body IQ stores, who can see it, and what leaves the app.</p>
+        <Link href="/privacy" className="mt-2 inline-block text-sm text-emerald-400 underline">
+          Read the privacy page
+        </Link>
+      </section>
+
+      <section className={`${card} mt-5`}>
         <h2 className="font-medium">Your data</h2>
         <p className="mt-1 text-sm text-zinc-400">Download everything Body IQ has stored for you.</p>
         <ul className="mt-2 space-y-1 text-sm">

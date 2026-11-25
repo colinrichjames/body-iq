@@ -87,6 +87,12 @@ export default async function LoginPage({
         </>
       )}
 
+      <p className="mt-6 text-center text-xs text-zinc-600">
+        <Link href="/privacy" className="underline">
+          Privacy: what Body IQ stores
+        </Link>
+      </p>
+
       {error && (
         <p role="alert" className="mt-4 text-sm text-red-400">
           {error}
