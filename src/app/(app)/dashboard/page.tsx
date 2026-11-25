@@ -10,12 +10,19 @@ import { computeReadiness } from "@/lib/readiness";
 import { fuelForDay } from "@/lib/fuel";
 import { classify } from "@/lib/intensity";
 import { swapHardSession } from "../workouts/actions";
+import { saveGuestAccount } from "./guest-actions";
 import { targetsFor } from "@/lib/targets";
 import type { BodyScan, DailyHealth, NutritionDay, Profile, Race, SyncRun, Workout } from "@/lib/types";
 
 async function signOut() {
   "use server";
   const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  // A guest leaving takes their data with them.
+  if (data?.claims?.is_anonymous === true) {
+    const { error } = await supabase.rpc("delete_guest_self");
+    if (error) redirect(`/dashboard?notice=${encodeURIComponent("Couldn't clear your guest data, so you're still signed in. Try again.")}`);
+  }
   await supabase.auth.signOut();
   redirect("/login");
 }
@@ -27,7 +34,7 @@ function delta(latest: number | null, previous: number | null, digits = 1) {
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ notice?: string }> }) {
   const { notice } = await searchParams;
-  const { supabase, userId, email } = await requireUser();
+  const { supabase, userId, email, isGuest } = await requireUser();
   const today = await getToday();
 
   const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, syncRes] = await Promise.all([
@@ -66,14 +73,37 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       <header className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Body IQ</p>
-          <p className="mt-1 truncate text-sm text-zinc-500">{email}</p>
+          <p className="mt-1 truncate text-sm text-zinc-500">{isGuest ? "Guest" : email}</p>
         </div>
         <form action={signOut}>
           <button type="submit" className="text-sm text-zinc-400 active:text-zinc-200">
-            Sign out
+            {isGuest ? "Leave guest session" : "Sign out"}
           </button>
         </form>
       </header>
+
+      {isGuest && (
+        <section className="mt-4 rounded-2xl border border-amber-700/50 bg-amber-950/20 p-4">
+          <p className="text-sm font-medium text-amber-300">You&apos;re using a guest session</p>
+          <p className="mt-1 text-xs text-zinc-400">
+            Everything works, but nothing is kept. Your data is deleted when you leave the session, and automatically after 24 hours. Add an email below if you want to keep it.
+          </p>
+          <form action={saveGuestAccount} className="mt-3 flex gap-2">
+            <input
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              required
+              placeholder="you@example.com"
+              className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-base outline-none placeholder:text-zinc-600 focus:border-emerald-500"
+            />
+            <button type="submit" className="shrink-0 rounded-xl bg-emerald-500 px-4 py-2.5 font-medium text-zinc-950 active:bg-emerald-400">
+              Save
+            </button>
+          </form>
+        </section>
+      )}
 
       {notice && <p className="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">{notice}</p>}
 

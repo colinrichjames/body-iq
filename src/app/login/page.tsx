@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { sendMagicLink } from "./actions";
+import { continueAsGuest, sendMagicLink } from "./actions";
 
 export default async function LoginPage({
   searchParams,
@@ -51,6 +51,24 @@ export default async function LoginPage({
             Email me a sign-in link
           </button>
         </form>
+      )}
+
+      {!sent && (
+        <>
+          <div className="my-6 flex items-center gap-3 text-xs text-zinc-600">
+            <span className="h-px flex-1 bg-zinc-800" />
+            or
+            <span className="h-px flex-1 bg-zinc-800" />
+          </div>
+          <form action={continueAsGuest}>
+            <button type="submit" className="w-full rounded-xl border border-zinc-700 px-4 py-3 font-medium text-zinc-200 active:bg-zinc-800">
+              Continue as guest
+            </button>
+          </form>
+          <p className="mt-2 text-xs text-zinc-500">
+            No email needed. Everything works, but nothing is saved: your data is deleted when you leave, and after 24 hours. You can add an email from the home screen to keep it.
+          </p>
+        </>
       )}
 
       {error && (

@@ -25,3 +25,16 @@ export async function sendMagicLink(formData: FormData) {
   }
   redirect(`/login?sent=${encodeURIComponent(email)}`);
 }
+
+/** Guest mode: an anonymous Supabase session, no email needed. Can be upgraded to a real account later. */
+export async function continueAsGuest() {
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInAnonymously();
+  if (error) {
+    const off = /anonymous/i.test(error.message);
+    redirect(
+      `/login?error=${encodeURIComponent(off ? "Guest mode isn't turned on yet. Use your email for now." : error.message)}`,
+    );
+  }
+  redirect("/dashboard");
+}
