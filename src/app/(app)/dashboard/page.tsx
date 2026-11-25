@@ -87,7 +87,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <section className="mt-4 rounded-2xl border border-amber-700/50 bg-amber-950/20 p-4">
           <p className="text-sm font-medium text-amber-300">You&apos;re using a guest session</p>
           <p className="mt-1 text-xs text-zinc-400">
-            Everything works, but nothing is kept. Your data is deleted when you leave the session, and automatically after 24 hours. Add an email below if you want to keep it.
+            Everything works, but nothing is kept. Guest data is deleted when you tap Leave guest session, or automatically 24 hours after you start, whichever comes first. Add an email below to keep it.
           </p>
           <form action={saveGuestAccount} className="mt-3 flex gap-2">
             <input

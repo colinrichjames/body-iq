@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { friendlyAuthError } from "@/lib/auth-errors";
 
 /** Turns the guest into a real account: same user id, so all data stays. Sends a confirmation link. */
 export async function saveGuestAccount(formData: FormData) {
@@ -18,7 +19,7 @@ export async function saveGuestAccount(formData: FormData) {
   if (error) {
     const taken = /already|registered|exists/i.test(error.message);
     redirect(
-      `/dashboard?notice=${encodeURIComponent(taken ? "That email already has an account. Sign out and use its sign-in link instead (this guest data won't carry over)." : error.message)}`,
+      `/dashboard?notice=${encodeURIComponent(taken ? "That email already has an account. Sign out and use its sign-in link instead (this guest data won't carry over)." : friendlyAuthError(error.message, error.code))}`,
     );
   }
   redirect(`/dashboard?notice=${encodeURIComponent(`Check ${email} and tap the link to finish saving your account.`)}`);

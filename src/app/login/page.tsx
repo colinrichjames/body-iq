@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { continueAsGuest, sendMagicLink } from "./actions";
@@ -5,13 +6,13 @@ import { continueAsGuest, sendMagicLink } from "./actions";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; sent?: string }>;
+  searchParams: Promise<{ error?: string; sent?: string; email?: string }>;
 }) {
   const supabase = await createClient();
   const { data } = await supabase.auth.getClaims();
   if (data?.claims) redirect("/dashboard");
 
-  const { error, sent } = await searchParams;
+  const { error, sent, email } = await searchParams;
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-12">
@@ -27,7 +28,21 @@ export default async function LoginPage({
 
       {sent ? (
         <div className="mt-8 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm">
-          Check <span className="font-medium">{sent}</span> for your sign-in link.
+          <p>
+            Check <span className="font-medium">{sent}</span> for your sign-in link.
+          </p>
+          <p className="mt-2 text-zinc-400">The link expires, so open it right away. Check spam if you don&apos;t see it.</p>
+          <div className="mt-3 flex items-center gap-4">
+            <form action={sendMagicLink}>
+              <input type="hidden" name="email" value={sent} />
+              <button type="submit" className="text-emerald-400 underline">
+                Resend link
+              </button>
+            </form>
+            <Link href="/login" className="text-zinc-400 underline">
+              Wrong email?
+            </Link>
+          </div>
         </div>
       ) : (
         <form action={sendMagicLink} className="mt-8 space-y-3">
@@ -40,6 +55,7 @@ export default async function LoginPage({
             type="email"
             inputMode="email"
             autoComplete="email"
+            defaultValue={email ?? ""}
             required
             placeholder="you@example.com"
             className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 text-base outline-none placeholder:text-zinc-600 focus:border-emerald-500"
@@ -66,7 +82,7 @@ export default async function LoginPage({
             </button>
           </form>
           <p className="mt-2 text-xs text-zinc-500">
-            No email needed. Everything works, but nothing is saved: your data is deleted when you leave, and after 24 hours. You can add an email from the home screen to keep it.
+            No email needed. Everything works, but nothing is kept. Guest data is deleted when you tap Leave guest session, or automatically 24 hours after you start, whichever comes first. Add an email on the dashboard to keep it.
           </p>
         </>
       )}

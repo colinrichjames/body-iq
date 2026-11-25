@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
 import type { NextRequest } from "next/server";
+import { friendlyAuthError } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -19,14 +20,21 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient();
   let errorMessage: string | null = null;
 
-  if (tokenHash && type) {
+  // Supabase sends an expired or used link back here with error params and no token.
+  // Report that as the single error instead of also complaining the link is incomplete.
+  const providerError = searchParams.get("error_description") ?? searchParams.get("error");
+  const providerCode = searchParams.get("error_code");
+
+  if (providerError || providerCode) {
+    errorMessage = friendlyAuthError(providerError, providerCode);
+  } else if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
-    errorMessage = error?.message ?? null;
+    if (error) errorMessage = friendlyAuthError(error.message, error.code);
   } else if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    errorMessage = error?.message ?? null;
+    if (error) errorMessage = friendlyAuthError(error.message, error.code);
   } else {
-    errorMessage = "That sign-in link is missing information. Request a new one.";
+    errorMessage = friendlyAuthError("missing");
   }
 
   if (errorMessage) {
