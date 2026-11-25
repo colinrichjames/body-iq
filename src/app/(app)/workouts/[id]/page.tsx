@@ -14,12 +14,13 @@ import { StatusBadge } from "@/components/status-badge";
 import { recap } from "@/lib/player";
 import { sessionInsights, type SessionInsights } from "@/lib/session-insights";
 import { prText } from "@/lib/lifting";
+import { GYM_READY, isSwapped, stationsIn } from "@/lib/hyrox-swaps";
 import { fmtDist, fmtPace } from "@/lib/distance";
 import { buildSteps } from "@/lib/steps";
 import { restSummary } from "@/lib/context";
 import type { WorkoutSet } from "@/lib/types";
 import { field } from "@/components/ui";
-import { attachActivity, deleteWorkout, duplicateWorkout, moveWorkout, setStatus } from "../actions";
+import { attachActivity, deleteWorkout, duplicateWorkout, moveWorkout, setGymSwaps, setStatus } from "../actions";
 import { garminSport } from "@/lib/sport";
 
 export default async function WorkoutPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
@@ -150,6 +151,48 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {w.sport === "hyrox" && w.status !== "completed" && stationsIn(s).length > 0 && (
+        <section className={`${card} mt-5`}>
+          <h2 className="text-sm text-zinc-400">{isSwapped(s) ? "Gym versions are on" : "No Hyrox equipment?"}</h2>
+          <p className="mt-1 text-sm text-zinc-300">
+            {isSwapped(s)
+              ? "Stations that need a sled, SkiErg or wall are replaced with classic-gym versions that train the same muscles."
+              : "Swap the SkiErg, sleds, wall balls and sandbag for exercises from a regular gym. You can switch back any time."}
+          </p>
+          <ul className="mt-3 divide-y divide-zinc-800 text-sm">
+            {stationsIn(s).map((st) => (
+              <li key={st.id} className="py-2">
+                <p>
+                  <span className="text-zinc-500 line-through">{st.hyrox}</span> <span className="font-medium text-emerald-400">{st.gym}</span>
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">{st.why}</p>
+                <p className="mt-0.5 text-xs text-zinc-500">Or: {st.alts.join("; ")}.</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-zinc-600">These need no swap: {GYM_READY.join("; ")}.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <form action={setGymSwaps}>
+              <input type="hidden" name="id" value={w.id} />
+              <input type="hidden" name="mode" value={isSwapped(s) ? "off" : "on"} />
+              <input type="hidden" name="scope" value="one" />
+              <button type="submit" className={isSwapped(s) ? `${btnGhost} px-3 py-2 text-sm` : `${btnPrimary} px-3 py-2 text-sm`}>
+                {isSwapped(s) ? "Back to Hyrox stations" : "Use gym versions"}
+              </button>
+            </form>
+            <form action={setGymSwaps}>
+              <input type="hidden" name="id" value={w.id} />
+              <input type="hidden" name="mode" value={isSwapped(s) ? "off" : "on"} />
+              <input type="hidden" name="scope" value="upcoming" />
+              <button type="submit" className={`${btnGhost} px-3 py-2 text-sm`}>
+                {isSwapped(s) ? "Undo for all upcoming Hyrox" : "Do this for all upcoming Hyrox"}
+              </button>
+            </form>
+          </div>
+          {!isSwapped(s) && <p className="mt-2 text-xs text-zinc-600">Rebuilding a race plan brings the original stations back.</p>}
         </section>
       )}
 

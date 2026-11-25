@@ -14,6 +14,7 @@ import { getToday } from "@/lib/today";
 import { buildStructure, exercisesFromForm } from "@/lib/structure";
 import { hasProgress } from "@/lib/progress";
 import { plannedSetLogs } from "@/lib/lifting";
+import { revertStructure, swapStructure } from "@/lib/hyrox-swaps";
 import { insightsText, sessionInsights } from "@/lib/session-insights";
 import type { BlockLog, SetLog, Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
@@ -461,4 +462,34 @@ export async function adaptMissed(formData: FormData) {
   if (skipIds.length) parts.push(`${moves.length ? "skipped" : "Skipped"} ${plural(skipIds.length)}`);
   revalidatePath("/", "layout");
   redirect(flash("/workouts", parts.length ? `${parts.join(", ")}.` : "Nothing was missed."));
+}
+
+/**
+ * Swap a Hyrox session's special-equipment stations (SkiErg, sleds, wall balls, sandbag) for classic-gym versions, or
+ * switch back. scope "upcoming" applies to every planned Hyrox session from today on. The originals are kept so the
+ * swap is always reversible.
+ */
+export async function setGymSwaps(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const on = String(formData.get("mode") ?? "on") === "on";
+  const scope = String(formData.get("scope") ?? "one");
+  const today = await getToday();
+
+  let q = supabase.from("workouts").select("id,structure").eq("sport", "hyrox").neq("status", "completed");
+  q = scope === "upcoming" ? q.gte("workout_date", today).eq("status", "planned") : q.eq("id", id);
+  const { data } = await q.returns<{ id: string; structure: WorkoutStructure | null }[]>();
+
+  let changed = 0;
+  for (const w of data ?? []) {
+    if (!w.structure?.blocks) continue;
+    const next = on ? swapStructure(w.structure) : revertStructure(w.structure);
+    if (JSON.stringify(next) === JSON.stringify(w.structure)) continue;
+    const { error } = await supabase.from("workouts").update({ structure: next }).eq("id", w.id);
+    if (error) redirect(flash(`/workouts/${id}`, error.message));
+    changed++;
+  }
+  revalidatePath("/", "layout");
+  const what = on ? "Switched to gym versions" : "Back to the Hyrox stations";
+  redirect(flash(`/workouts/${id}`, changed ? `${what} for ${changed} session${changed === 1 ? "" : "s"}.` : "Nothing to change."));
 }

@@ -65,6 +65,8 @@ export type Block = {
   name: string;
   detail: string;
   minutes?: number;
+  /** Set when the block was swapped to gym equipment; holds the Hyrox original so it can be restored. */
+  original?: { name: string; detail: string };
 };
 
 export type WorkoutStructure = {
