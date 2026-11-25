@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { isIsoDate } from "@/lib/dates";
+import { parseDuration } from "@/lib/hyrox";
 import { generatePlan, RACE_TYPES } from "@/lib/plan";
 import { getToday } from "@/lib/today";
 import type { Race, RaceType } from "@/lib/types";
@@ -65,13 +66,17 @@ export async function addRace(formData: FormData) {
   const location = String(formData.get("location") ?? "").trim() || null;
   const goal = String(formData.get("goal") ?? "").trim() || null;
 
+  const priority = String(formData.get("priority") ?? "B");
+  const goalRaw = String(formData.get("goal_time") ?? "").trim();
+  const goalSec = goalRaw ? parseDuration(goalRaw) : null;
+  if (goalRaw && goalSec === null) fail("Goal time should look like 1:20:00 or 80 (minutes).");
   if (!name) fail("Give the race a name.");
   if (!RACE_TYPES.some((t) => t.value === type)) fail("Pick a race type.");
   if (!isIsoDate(date)) fail("Pick the race date.");
 
   const { data, error } = await supabase
     .from("races")
-    .insert({ user_id: userId, name, race_type: type as RaceType, race_date: date, location, goal })
+    .insert({ user_id: userId, name, race_type: type as RaceType, race_date: date, location, goal, priority: ["A", "B", "C"].includes(priority) ? priority : "B", goal_time_sec: goalSec })
     .select("*")
     .single<Race>();
   if (error || !data) fail(error?.message ?? "Could not save the race.");
@@ -108,4 +113,70 @@ export async function deleteRace(formData: FormData) {
   revalidatePath("/workouts");
   revalidatePath("/dashboard");
   redirect("/races");
+}
+
+export async function addBenchmark(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const raceId = String(formData.get("race_id") ?? "");
+  const station = String(formData.get("station") ?? "");
+  const sec = parseDuration(String(formData.get("time") ?? ""));
+  const date = String(formData.get("effort_date") ?? "");
+  const back = (m: string) => redirect(`/races/${raceId}?error=${encodeURIComponent(m)}`);
+  if (!sec) back("Enter a time like 4:45 (mm:ss).");
+  if (!isIsoDate(date)) back("Pick a date.");
+  const { error } = await supabase.from("hyrox_benchmarks").insert({
+    user_id: userId,
+    station,
+    effort_date: date,
+    time_sec: sec,
+    notes: String(formData.get("notes") ?? "").trim() || null,
+  });
+  if (error) back(error.message);
+  revalidatePath(`/races/${raceId}`);
+  redirect(`/races/${raceId}`);
+}
+
+export async function deleteBenchmark(formData: FormData) {
+  const { supabase } = await requireUser();
+  const raceId = String(formData.get("race_id") ?? "");
+  await supabase.from("hyrox_benchmarks").delete().eq("id", String(formData.get("id") ?? ""));
+  revalidatePath(`/races/${raceId}`);
+  redirect(`/races/${raceId}`);
+}
+
+export type PlanCsvRow = {
+  date: string;
+  sport: string;
+  title: string;
+  duration_min: number | null;
+  description: string;
+};
+
+const SPORTS = ["strength", "run", "bike", "swim", "hyrox", "mobility", "other"];
+
+export async function importPlanRows(raceId: string, rows: PlanCsvRow[]): Promise<{ error: string | null; count: number }> {
+  const { supabase, userId } = await requireUser();
+  const { data: race } = await supabase.from("races").select("id").eq("id", raceId).maybeSingle();
+  if (!race) return { error: "Race not found.", count: 0 };
+  const clean = rows
+    .filter((r) => isIsoDate(r.date) && r.title.trim())
+    .slice(0, 800)
+    .map((r) => ({
+      user_id: userId,
+      race_id: raceId,
+      workout_date: r.date,
+      sport: SPORTS.includes(r.sport) ? r.sport : "other",
+      title: r.title.trim().slice(0, 200),
+      description: r.description.trim().slice(0, 2000) || null,
+      planned_duration_min: r.duration_min && r.duration_min > 0 ? Math.round(r.duration_min) : null,
+      generated: false,
+      status: "planned",
+    }));
+  if (clean.length === 0) return { error: "No valid rows (need date as YYYY-MM-DD and a title).", count: 0 };
+  const { error } = await supabase.from("workouts").insert(clean);
+  if (error) return { error: error.message, count: 0 };
+  revalidatePath("/workouts");
+  revalidatePath("/races");
+  revalidatePath("/dashboard");
+  return { error: null, count: clean.length };
 }

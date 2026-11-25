@@ -1,35 +1,45 @@
 import { requireUser } from "@/lib/auth";
 import { addDays, formatDay } from "@/lib/dates";
 import { getToday } from "@/lib/today";
-import type { NutritionDay, Profile } from "@/lib/types";
+import { targetsFor } from "@/lib/targets";
+import type { NutritionDay, Profile, Workout } from "@/lib/types";
 import { btnGhost, card, field } from "@/components/ui";
-import { saveTargets } from "./actions";
+import { quickAdd, saveTargets } from "./actions";
 import { Importer } from "./importer";
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
-export default async function NutritionPage() {
+export default async function NutritionPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
   const { supabase, userId } = await requireUser();
   const today = await getToday();
   const since = addDays(today, -13);
 
-  const [{ data: profile }, { data: days }] = await Promise.all([
+  const [{ data: profile }, { data: days }, { data: wk }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
     supabase.from("nutrition_days").select("*").gte("day", since).order("day", { ascending: false }).returns<NutritionDay[]>(),
+    supabase.from("workouts").select("*").gte("workout_date", since).lte("workout_date", today).returns<Workout[]>(),
   ]);
+  const workouts = wk ?? [];
   const rows = days ?? [];
   const week = rows.filter((d) => d.day >= addDays(today, -6) && (d.calories ?? 0) > 0);
 
+  // Targets differ on training and rest days, so compare against the average of each logged day's own target.
+  const avgTarget = (pick: (t: ReturnType<typeof targetsFor>) => number | null) => {
+    const vals = week.map((d) => pick(targetsFor(d.day, workouts, profile ?? null))).filter((v): v is number => v !== null);
+    return avg(vals);
+  };
   const stats = [
-    { label: "Calories", unit: "", value: avg(week.map((d) => d.calories ?? 0)), target: profile?.calorie_target },
-    { label: "Protein", unit: " g", value: avg(week.map((d) => d.protein_g ?? 0)), target: profile?.protein_target_g },
-    { label: "Carbs", unit: " g", value: avg(week.map((d) => d.carbs_g ?? 0)), target: profile?.carbs_target_g },
-    { label: "Fat", unit: " g", value: avg(week.map((d) => d.fat_g ?? 0)), target: profile?.fat_target_g },
+    { label: "Calories", unit: "", value: avg(week.map((d) => d.calories ?? 0)), target: avgTarget((t) => t.calories) },
+    { label: "Protein", unit: " g", value: avg(week.map((d) => d.protein_g ?? 0)), target: avgTarget((t) => t.protein) },
+    { label: "Carbs", unit: " g", value: avg(week.map((d) => d.carbs_g ?? 0)), target: avgTarget((t) => t.carbs) },
+    { label: "Fat", unit: " g", value: avg(week.map((d) => d.fat_g ?? 0)), target: avgTarget((t) => t.fat) },
   ];
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Nutrition</h1>
+      {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
 
       <section className={`${card} mt-5`}>
         <h2 className="text-sm text-zinc-400">7-day average vs target</h2>
@@ -45,7 +55,7 @@ export default async function NutritionPage() {
                     {s.value === null ? "--" : Math.round(s.value)}
                     <span className="text-sm font-normal text-zinc-500">{s.unit}</span>
                   </p>
-                  <p className="text-xs text-zinc-500">{s.target ? `target ${s.target}${s.unit}` : "no target"}</p>
+                  <p className="text-xs text-zinc-500">{s.target ? `target ${Math.round(s.target)}${s.unit}` : "no target"}</p>
                 </div>
               ))}
             </div>
@@ -56,26 +66,42 @@ export default async function NutritionPage() {
 
       <Importer />
 
-      <form action={saveTargets} className={`${card} mt-6 space-y-3`}>
-        <h2 className="font-medium">Daily targets</h2>
+      <form action={quickAdd} className={`${card} mt-6 space-y-3`}>
+        <h2 className="font-medium">Quick add a day</h2>
+        <p className="text-sm text-zinc-500">Type in a day&apos;s totals. Replaces anything already logged for that date.</p>
         <div className="grid grid-cols-2 gap-3">
-          <label className="text-sm text-zinc-400">
-            Calories
-            <input name="calorie_target" type="number" inputMode="numeric" defaultValue={profile?.calorie_target ?? ""} className={`${field} mt-1`} />
-          </label>
-          <label className="text-sm text-zinc-400">
-            Protein (g)
-            <input name="protein_target_g" type="number" inputMode="numeric" defaultValue={profile?.protein_target_g ?? ""} className={`${field} mt-1`} />
-          </label>
-          <label className="text-sm text-zinc-400">
-            Carbs (g)
-            <input name="carbs_target_g" type="number" inputMode="numeric" defaultValue={profile?.carbs_target_g ?? ""} className={`${field} mt-1`} />
-          </label>
-          <label className="text-sm text-zinc-400">
-            Fat (g)
-            <input name="fat_target_g" type="number" inputMode="numeric" defaultValue={profile?.fat_target_g ?? ""} className={`${field} mt-1`} />
-          </label>
+          <input name="day" type="date" defaultValue={today} required className={field} />
+          <input name="calories" type="number" inputMode="numeric" placeholder="Calories" required className={field} />
+          <input name="protein_g" type="number" inputMode="decimal" placeholder="Protein (g)" className={field} />
+          <input name="carbs_g" type="number" inputMode="decimal" placeholder="Carbs (g)" className={field} />
+          <input name="fat_g" type="number" inputMode="decimal" placeholder="Fat (g)" className={field} />
         </div>
+        <button type="submit" className={`${btnGhost} w-full`}>
+          Save day
+        </button>
+      </form>
+
+      <form action={saveTargets} className={`${card} mt-6 space-y-4`}>
+        <h2 className="font-medium">Daily targets</h2>
+        <p className="text-sm text-zinc-500">Training days use the first set. Rest days use the second; leave it blank to use the training-day numbers.</p>
+        <fieldset className="space-y-2">
+          <legend className="text-sm text-zinc-300">Training day</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <input name="calorie_target" type="number" inputMode="numeric" placeholder="Calories" defaultValue={profile?.calorie_target ?? ""} className={field} />
+            <input name="protein_target_g" type="number" inputMode="numeric" placeholder="Protein (g)" defaultValue={profile?.protein_target_g ?? ""} className={field} />
+            <input name="carbs_target_g" type="number" inputMode="numeric" placeholder="Carbs (g)" defaultValue={profile?.carbs_target_g ?? ""} className={field} />
+            <input name="fat_target_g" type="number" inputMode="numeric" placeholder="Fat (g)" defaultValue={profile?.fat_target_g ?? ""} className={field} />
+          </div>
+        </fieldset>
+        <fieldset className="space-y-2">
+          <legend className="text-sm text-zinc-300">Rest day</legend>
+          <div className="grid grid-cols-2 gap-3">
+            <input name="rest_calorie_target" type="number" inputMode="numeric" placeholder="Calories" defaultValue={profile?.rest_calorie_target ?? ""} className={field} />
+            <input name="rest_protein_g" type="number" inputMode="numeric" placeholder="Protein (g)" defaultValue={profile?.rest_protein_g ?? ""} className={field} />
+            <input name="rest_carbs_g" type="number" inputMode="numeric" placeholder="Carbs (g)" defaultValue={profile?.rest_carbs_g ?? ""} className={field} />
+            <input name="rest_fat_g" type="number" inputMode="numeric" placeholder="Fat (g)" defaultValue={profile?.rest_fat_g ?? ""} className={field} />
+          </div>
+        </fieldset>
         <button type="submit" className={`${btnGhost} w-full`}>
           Save targets
         </button>

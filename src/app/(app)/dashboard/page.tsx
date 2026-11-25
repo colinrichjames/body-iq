@@ -6,7 +6,9 @@ import { addDays, diffDays, formatDay } from "@/lib/dates";
 import { computeInsights } from "@/lib/insights";
 import { currentPhase, raceLabel } from "@/lib/plan";
 import { getToday } from "@/lib/today";
-import type { BodyScan, NutritionDay, Profile, Race, Workout } from "@/lib/types";
+import { computeReadiness } from "@/lib/readiness";
+import { targetsFor } from "@/lib/targets";
+import type { BodyScan, DailyHealth, NutritionDay, Profile, Race, SyncRun, Workout } from "@/lib/types";
 
 async function signOut() {
   "use server";
@@ -24,18 +26,24 @@ export default async function DashboardPage() {
   const { supabase, userId, email } = await requireUser();
   const today = await getToday();
 
-  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes] = await Promise.all([
+  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, syncRes] = await Promise.all([
     supabase.from("body_scans").select("*").order("scanned_at", { ascending: false }).limit(2).returns<BodyScan[]>(),
     supabase.from("workouts").select("*").gte("workout_date", addDays(today, -27)).lte("workout_date", addDays(today, 1)).returns<Workout[]>(),
     supabase.from("nutrition_days").select("*").gte("day", addDays(today, -13)).order("day", { ascending: false }).returns<NutritionDay[]>(),
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
     supabase.from("races").select("*").gte("race_date", today).order("race_date").limit(1).returns<Race[]>(),
+    supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(8).returns<DailyHealth[]>(),
+    supabase.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(1).returns<SyncRun[]>(),
   ]);
   const scans = scansRes.data ?? [];
   const [latest, previous] = scans;
   const workouts = workoutsRes.data ?? [];
   const nextRace = racesRes.data?.[0] ?? null;
   const todays = workouts.filter((w) => w.workout_date === today);
+  const readiness = computeReadiness(healthRes.data ?? []);
+  const lastSync = syncRes.data?.[0] ?? null;
+  const todayFuel = (nutritionRes.data ?? []).find((d) => d.day === today) ?? null;
+  const fuelTargets = targetsFor(today, workouts, profileRes.data ?? null);
   const insights = computeInsights({
     today,
     scans,
@@ -75,6 +83,55 @@ export default async function DashboardPage() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="mt-4 rounded-2xl border border-zinc-800 p-5">
+        <h2 className="text-sm text-zinc-400">Fuel today</h2>
+        {todayFuel && (todayFuel.calories ?? 0) > 0 ? (
+          <p className="mt-2 tabular-nums">
+            <span className="text-2xl font-semibold">{Math.round(todayFuel.calories ?? 0)}</span>
+            <span className="text-zinc-500"> / {fuelTargets.calories ?? "--"} cal</span>
+            <span className="ml-3 text-sm text-zinc-400">
+              P {Math.round(todayFuel.protein_g ?? 0)}/{fuelTargets.protein ?? "--"}
+            </span>
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-zinc-500">
+            Nothing logged for today. Target {fuelTargets.calories ? `${fuelTargets.calories} cal` : "not set"}.{" "}
+            <Link href="/nutrition" className="text-emerald-400">
+              Add
+            </Link>
+          </p>
+        )}
+      </section>
+
+      <section className="mt-4 rounded-2xl border border-zinc-800 p-5">
+        <h2 className="text-sm text-zinc-400">Readiness</h2>
+        {readiness ? (
+          <>
+            <p
+              className={`mt-2 font-medium ${readiness.status === "green" ? "text-emerald-400" : readiness.status === "amber" ? "text-amber-400" : "text-red-400"}`}
+            >
+              {readiness.headline}
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-300">
+              {readiness.reasons.map((r, i) => (
+                <li key={i}>{r}</li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-zinc-500">
+              Based on {formatDay(readiness.day)}. Rules: sleep, HRV vs 7-day baseline, resting HR, Body Battery, stress.
+            </p>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-zinc-500">No Garmin health data yet. Sleep, HRV and Body Battery will drive a green/amber/red call here once sync is connected.</p>
+        )}
+        <p className="mt-3 border-t border-zinc-800 pt-3 text-xs text-zinc-500">
+          Garmin sync:{" "}
+          {lastSync
+            ? `${lastSync.status === "success" ? "last success" : lastSync.status} ${new Date(lastSync.finished_at ?? lastSync.started_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${lastSync.error ? `, ${lastSync.error}` : ""}`
+            : "not connected yet"}
+        </p>
       </section>
 
       {nextRace && (

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { isIsoDate } from "@/lib/dates";
 import type { NutritionRow } from "@/lib/mfp";
@@ -21,6 +22,10 @@ export async function saveTargets(formData: FormData) {
       protein_target_g: targetOrNull(formData.get("protein_target_g")),
       carbs_target_g: targetOrNull(formData.get("carbs_target_g")),
       fat_target_g: targetOrNull(formData.get("fat_target_g")),
+      rest_calorie_target: targetOrNull(formData.get("rest_calorie_target")),
+      rest_protein_g: targetOrNull(formData.get("rest_protein_g")),
+      rest_carbs_g: targetOrNull(formData.get("rest_carbs_g")),
+      rest_fat_g: targetOrNull(formData.get("rest_fat_g")),
     })
     .eq("id", userId);
   if (error) console.error("saveTargets", error.message);
@@ -53,4 +58,37 @@ export async function importNutrition(rows: NutritionRow[]): Promise<{ error: st
   revalidatePath("/nutrition");
   revalidatePath("/dashboard");
   return { error: null, count: clean.length };
+}
+
+function macro(v: FormDataEntryValue | null): number | null {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) && n >= 0 && n < 20000 ? n : null;
+}
+
+/** Quick-add: set a day's totals by hand (scope N-4). Overwrites that day. */
+export async function quickAdd(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const day = String(formData.get("day") ?? "");
+  const calories = macro(formData.get("calories"));
+  if (!isIsoDate(day) || calories === null || calories <= 0) {
+    redirect(`/nutrition?error=${encodeURIComponent("Enter a date and calories.")}`);
+  }
+  const { error } = await supabase.from("nutrition_days").upsert(
+    {
+      user_id: userId,
+      day,
+      calories,
+      protein_g: macro(formData.get("protein_g")),
+      carbs_g: macro(formData.get("carbs_g")),
+      fat_g: macro(formData.get("fat_g")),
+      source: "manual",
+    },
+    { onConflict: "user_id,day" },
+  );
+  if (error) redirect(`/nutrition?error=${encodeURIComponent(error.message)}`);
+  revalidatePath("/nutrition");
+  revalidatePath("/dashboard");
+  redirect("/nutrition");
 }

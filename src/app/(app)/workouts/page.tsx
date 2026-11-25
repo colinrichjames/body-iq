@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { addDays, formatDay, isIsoDate, startOfWeek } from "@/lib/dates";
 import { getToday } from "@/lib/today";
+import { weekSummary } from "@/lib/week";
 import type { Workout } from "@/lib/types";
 import { btnPrimary } from "@/components/ui";
 
@@ -32,6 +33,8 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
     .order("created_at")
     .returns<Workout[]>();
   const workouts = data ?? [];
+  const summary = weekSummary(workouts);
+  const hm = (m: number) => (m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m}m`);
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   return (
@@ -54,6 +57,35 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
           Next &rarr;
         </Link>
       </div>
+
+      {summary.plannedMin > 0 && (
+        <section className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm text-zinc-400">Week volume</h2>
+            <p className="text-sm tabular-nums">
+              <span className="font-semibold text-emerald-400">{summary.compliance}%</span>{" "}
+              <span className="text-zinc-500">
+                {hm(summary.doneMin)} of {hm(summary.plannedMin)}
+              </span>
+            </p>
+          </div>
+          <ul className="mt-3 space-y-2">
+            {summary.bySport.map((t) => (
+              <li key={t.sport} className="text-sm">
+                <div className="flex justify-between">
+                  <span>{SPORT_LABEL[t.sport]}</span>
+                  <span className="tabular-nums text-zinc-400">
+                    {hm(t.doneMin)} / {hm(t.plannedMin)}
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                  <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, t.plannedMin ? (t.doneMin / t.plannedMin) * 100 : 0)}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="mt-4 space-y-4">
         {days.map((day) => {

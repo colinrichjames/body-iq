@@ -33,6 +33,8 @@ export type Race = {
   race_date: string;
   location: string | null;
   goal: string | null;
+  priority: "A" | "B" | "C";
+  goal_time_sec: number | null;
   created_at: string;
 };
 
@@ -117,4 +119,40 @@ export type Profile = {
   protein_target_g: number | null;
   carbs_target_g: number | null;
   fat_target_g: number | null;
+  rest_calorie_target: number | null;
+  rest_protein_g: number | null;
+  rest_carbs_g: number | null;
+  rest_fat_g: number | null;
+};
+
+export type HyroxBenchmark = {
+  id: string;
+  user_id: string;
+  station: string;
+  effort_date: string;
+  time_sec: number;
+  notes: string | null;
+};
+
+export type DailyHealth = {
+  user_id: string;
+  day: string;
+  sleep_seconds: number | null;
+  sleep_score: number | null;
+  hrv_ms: number | null;
+  resting_hr: number | null;
+  body_battery_max: number | null;
+  body_battery_min: number | null;
+  stress_avg: number | null;
+  steps: number | null;
+};
+
+export type SyncRun = {
+  id: string;
+  source: string;
+  started_at: string;
+  finished_at: string | null;
+  status: "running" | "success" | "error";
+  items: number | null;
+  error: string | null;
 };

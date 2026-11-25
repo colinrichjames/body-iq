@@ -1,5 +1,7 @@
 import { requireUser } from "@/lib/auth";
+import Link from "next/link";
 import { diffDays, formatDay } from "@/lib/dates";
+import { fmtTime } from "@/lib/hyrox";
 import { currentPhase, RACE_TYPES, raceLabel } from "@/lib/plan";
 import { getToday } from "@/lib/today";
 import type { Race } from "@/lib/types";
@@ -46,7 +48,15 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
           <input name="race_date" type="date" required min={today} className={`${field} mt-1`} />
         </label>
         <input name="location" placeholder="Location (optional)" className={field} />
-        <input name="goal" placeholder="Goal, e.g. sub 3:45 or 80 min (optional)" className={field} />
+        <div className="grid grid-cols-2 gap-3">
+          <select name="priority" defaultValue="B" className={field} aria-label="Priority">
+            <option value="A">A race</option>
+            <option value="B">B race</option>
+            <option value="C">C race</option>
+          </select>
+          <input name="goal_time" placeholder="Goal time, e.g. 1:20:00" className={field} />
+        </div>
+        <input name="goal" placeholder="Other goals (optional)" className={field} />
         <label className="flex items-center gap-2 text-sm text-zinc-300">
           <input name="generate" type="checkbox" defaultChecked className="size-4 accent-emerald-500" />
           Generate a training plan
@@ -67,12 +77,18 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
             <li key={r.id} className={card}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium">{r.name}</p>
+                  <Link href={`/races/${r.id}`} className="font-medium underline-offset-2 active:underline">
+                    {r.name} <span className="text-xs font-normal text-zinc-500">({r.priority})</span>
+                  </Link>
                   <p className="text-sm text-zinc-400">
                     {raceLabel(r.race_type)} &middot; {formatDay(r.race_date, { weekday: true, year: true })}
                   </p>
                   {r.location && <p className="text-sm text-zinc-500">{r.location}</p>}
-                  {r.goal && <p className="text-sm text-zinc-500">Goal: {r.goal}</p>}
+                  {(r.goal_time_sec || r.goal) && (
+                    <p className="text-sm text-zinc-500">
+                      Goal: {[r.goal_time_sec ? fmtTime(r.goal_time_sec) : null, r.goal].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-2xl font-semibold tabular-nums text-emerald-400">{days}</p>

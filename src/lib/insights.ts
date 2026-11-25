@@ -1,5 +1,6 @@
 import { addDays, diffDays } from "./dates";
 import { currentPhase, raceLabel } from "./plan";
+import { targetsFor } from "./targets";
 import type { BodyScan, NutritionDay, Profile, Race, Workout } from "./types";
 
 export type CategoryScore = {
@@ -40,6 +41,9 @@ export function computeInsights(input: {
     const since = addDays(today, -6);
     const week = nutrition.filter((d) => d.day >= since && d.day <= today && (d.calories ?? 0) > 0);
     const targets = profile?.calorie_target && profile?.protein_target_g ? profile : null;
+    const dayTargets = week.map((d) => targetsFor(d.day, workouts, profile));
+    const tCal = avg(dayTargets.map((t) => t.calories ?? targets?.calorie_target ?? 0));
+    const tPro = avg(dayTargets.map((t) => t.protein ?? targets?.protein_target_g ?? 0));
     let score: number | null = null;
     let note = "";
     if (!targets) {
@@ -49,14 +53,14 @@ export function computeInsights(input: {
     } else {
       const avgCal = avg(week.map((d) => d.calories ?? 0));
       const avgPro = avg(week.map((d) => d.protein_g ?? 0));
-      const dev = Math.abs(avgCal - targets.calorie_target!) / targets.calorie_target!;
+      const dev = Math.abs(avgCal - tCal) / tCal;
       const calScore = clamp01(1 - Math.max(0, dev - 0.05) / 0.2);
-      const proScore = clamp01(1 - Math.max(0, 0.95 - avgPro / targets.protein_target_g!) / 0.35);
+      const proScore = clamp01(1 - Math.max(0, 0.95 - avgPro / tPro) / 0.35);
       const logScore = week.length / 7;
       score = Math.round(20 * (0.4 * calScore + 0.4 * proScore + 0.2 * logScore) * 10) / 10;
       note = `${week.length}/7 days logged, avg ${Math.round(avgCal)} cal and ${Math.round(avgPro)} g protein.`;
       bullets.push(
-        `Nutrition: ${Math.round(avgCal)} cal/day vs ${targets.calorie_target} target, protein ${Math.round(avgPro)} g vs ${targets.protein_target_g} g.`,
+        `Nutrition: ${Math.round(avgCal)} cal/day vs ${Math.round(tCal)} target, protein ${Math.round(avgPro)} g vs ${Math.round(tPro)} g.`,
       );
       const sodium = week.map((d) => d.sodium_mg ?? 0).filter((n) => n > 0);
       if (sodium.length >= 3 && avg(sodium) > 3500) {
