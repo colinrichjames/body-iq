@@ -155,4 +155,5 @@ export type SyncRun = {
   status: "running" | "success" | "error";
   items: number | null;
   error: string | null;
+  detail: { endpoints?: { name: string; status: number | string; count?: number }[] } | null;
 };
