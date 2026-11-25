@@ -4,7 +4,10 @@ import type { Workout, WorkoutSet } from "@/lib/types";
 import { AssistantLoader } from "./assistant-loader";
 import { hyroxBlockTargets } from "@/lib/context";
 import { isHyrox } from "@/lib/hyrox";
-import type { Race } from "@/lib/types";
+import type { DailyHealth, Race, RecoveryCheckin } from "@/lib/types";
+import { loadDeload, loadHistory } from "@/lib/progression-data";
+import { suggestNext } from "@/lib/progression";
+import { mergeCheckins } from "@/lib/readiness";
 
 export default async function StartWorkoutPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -35,6 +38,25 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
       const sets = (data ?? []).filter((r) => r.exercise === ex && r.workout_id === wid).sort((a, b) => a.set_number - b.set_number);
       lastVolume[ex] = sets.reduce((a, r) => a + (r.weight_lb !== null && r.reps !== null ? Number(r.weight_lb) * r.reps : 0), 0);
       lastTime[ex] = sets.map((r) => `${r.weight_lb !== null ? `${Number(r.weight_lb)} × ` : ""}${r.reps ?? "-"}`).join(", ");
+    }
+  }
+
+  // History-based weight suggestions, with a lighter 90% load when the deload check says so.
+  const suggested: Record<string, { weight: number; text: string }> = {};
+  let deload = false;
+  if (names.length) {
+    const today = w.workout_date;
+    const [{ data: hrows }, { data: crows }] = await Promise.all([
+      supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(14).returns<DailyHealth[]>(),
+      supabase.from("recovery_checkins").select("day,sleep_hours,soreness,energy").order("day", { ascending: false }).limit(14).returns<RecoveryCheckin[]>(),
+    ]);
+    const check = await loadDeload(supabase, today, mergeCheckins(hrows ?? [], crows ?? []));
+    deload = check.level === "deload";
+    const hist = await loadHistory(supabase, today, { names, excludeId: id });
+    for (const e of w.structure?.exercises ?? []) {
+      const target = typeof e.reps === "number" ? e.reps : 0;
+      const sug = target ? suggestNext(e.name, hist[e.name] ?? [], target, { deload }) : null;
+      if (sug) suggested[e.name] = { weight: sug.weight, text: `${sug.weight} lb: ${sug.reason}` };
     }
   }
 
@@ -81,5 +103,5 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
     }
   }
 
-  return <AssistantLoader workout={w} lastWeights={lastWeights} lastTime={lastTime} serverResume={serverResume} targets={targets} targetRace={targetRace} lastVolume={lastVolume} lastEndurance={lastEndurance} plannedDistanceKm={w.planned_distance_km !== null ? Number(w.planned_distance_km) : null} distanceUnit={w.distance_unit ?? "mi"} />;
+  return <AssistantLoader workout={w} lastWeights={lastWeights} lastTime={lastTime} serverResume={serverResume} targets={targets} targetRace={targetRace} lastVolume={lastVolume} suggested={suggested} deload={deload} lastEndurance={lastEndurance} plannedDistanceKm={w.planned_distance_km !== null ? Number(w.planned_distance_km) : null} distanceUnit={w.distance_unit ?? "mi"} />;
 }

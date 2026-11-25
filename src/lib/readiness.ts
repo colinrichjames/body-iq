@@ -100,3 +100,13 @@ export function mergeCheckins(rows: DailyHealth[], checkins: RecoveryCheckin[]):
   }
   return [...byDay.values()].sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
 }
+
+/** How many of the last 7 scored days came out amber or red. `rows` is newest first. */
+export function lowReadinessDays(rows: HealthDay[]): number {
+  let n = 0;
+  for (let i = 0; i < Math.min(7, rows.length); i++) {
+    const r = computeReadiness(rows.slice(i));
+    if (r && r.status !== "green") n++;
+  }
+  return n;
+}
