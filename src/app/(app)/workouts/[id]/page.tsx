@@ -6,7 +6,7 @@ import { getToday } from "@/lib/today";
 import { addDays, formatDay } from "@/lib/dates";
 import type { Workout } from "@/lib/types";
 import { btnGhost, btnPrimary, card } from "@/components/ui";
-import { sessionFuel } from "@/lib/fuel";
+import { fuelCheck, sessionFuel, sessionTotals } from "@/lib/fuel";
 import { looksMerged } from "@/lib/structure";
 import { sessionUnits } from "@/lib/steps";
 import { progressLabel } from "@/lib/progress";
@@ -20,7 +20,7 @@ import { buildSteps } from "@/lib/steps";
 import { restSummary } from "@/lib/context";
 import type { WorkoutSet } from "@/lib/types";
 import { field } from "@/components/ui";
-import { attachActivity, deleteWorkout, duplicateWorkout, moveWorkout, setGymSwaps, setStatus } from "../actions";
+import { attachActivity, deleteWorkout, duplicateWorkout, logSessionFuel, moveWorkout, setGymSwaps, setStatus } from "../actions";
 import { garminSport } from "@/lib/sport";
 
 export default async function WorkoutPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
@@ -49,6 +49,8 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
   const unit = w.distance_unit ?? "mi";
   const pace = w.actual_distance_km && w.actual_duration_min && w.sport !== "swim" ? fmtPace(w.actual_duration_min, w.actual_distance_km, unit) : null;
   const fuel = sessionFuel(w);
+  const totals = sessionTotals(w.actual_duration_min ?? w.planned_duration_min ?? 0, w.sport);
+  const check = fuelCheck(w);
   const hasGuide = !!(s?.exercises?.length || s?.blocks?.length);
   const units = sessionUnits(w);
   let doneSets = 0;
@@ -249,6 +251,56 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
         <section className={`${card} mt-5 text-sm`}>
           <h2 className="text-zinc-400">Fuel this session</h2>
           <p className="mt-1 text-zinc-300">{fuel.text}</p>
+          {totals && (
+            <p className="mt-2 text-zinc-400">
+              For this session: {totals.carbs[0]}-{totals.carbs[1]} g carbs, {totals.fluid[0]}-{totals.fluid[1]} ml fluid, {totals.sodium[0]}-{totals.sodium[1]} mg sodium.
+            </p>
+          )}
+        </section>
+      )}
+
+      {(w.status === "completed" || w.status === "in_progress") && (w.planned_duration_min ?? 0) >= 45 && (
+        <section className={`${card} mt-5 text-sm`}>
+          <h2 className="text-zinc-400">What you took in</h2>
+          {check && (
+            <>
+              <ul className="mt-2 divide-y divide-zinc-800">
+                {check.rows.map((r) => (
+                  <li key={r.label} className="flex justify-between gap-3 py-2">
+                    <span>{r.label}</span>
+                    <span className="text-right tabular-nums">
+                      {r.actual === null ? <span className="text-zinc-500">not logged</span> : `${r.actual} ${r.unit} · ${r.perHour} ${r.unit}/h`}
+                      <span className="block text-xs text-zinc-500">
+                        range {r.range[0]}-{r.range[1]} {r.unit}/h
+                        {r.status === "low" && <span className="text-amber-400"> · under</span>}
+                        {r.status === "ok" && <span className="text-emerald-400"> · on target</span>}
+                        {r.status === "high" && <span className="text-zinc-300"> · above</span>}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-zinc-300">{check.summary}</p>
+            </>
+          )}
+          <form action={logSessionFuel} className="mt-3 grid grid-cols-3 gap-3">
+            <input type="hidden" name="id" value={w.id} />
+            <label className="text-xs text-zinc-400">
+              Carbs (g)
+              <input name="fuel_carbs_g" type="number" inputMode="decimal" min="0" defaultValue={w.fuel_carbs_g ?? ""} className={`${field} mt-1`} />
+            </label>
+            <label className="text-xs text-zinc-400">
+              Fluid (ml)
+              <input name="fluid_ml" type="number" inputMode="numeric" min="0" defaultValue={w.fluid_ml ?? ""} className={`${field} mt-1`} />
+            </label>
+            <label className="text-xs text-zinc-400">
+              Sodium (mg)
+              <input name="sodium_mg" type="number" inputMode="numeric" min="0" defaultValue={w.sodium_mg ?? ""} className={`${field} mt-1`} />
+            </label>
+            <button type="submit" className={`${btnGhost} col-span-3 px-3 py-2 text-sm`}>
+              Save fuel and fluids
+            </button>
+          </form>
         </section>
       )}
 

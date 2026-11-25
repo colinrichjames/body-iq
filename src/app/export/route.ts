@@ -3,8 +3,8 @@ import { toCsv } from "@/lib/csv";
 
 export const dynamic = "force-dynamic";
 
-const TABLES = ["profiles", "body_scans", "races", "workouts", "workout_sets", "nutrition_days", "food_entries", "custom_foods", "hyrox_benchmarks", "activities", "daily_health"] as const;
-const CSV_TABLES: Record<string, string> = { workouts: "workouts", sets: "workout_sets", nutrition: "nutrition_days", food: "food_entries", activities: "activities", health: "daily_health", scans: "body_scans" };
+const TABLES = ["profiles", "body_scans", "races", "workouts", "workout_sets", "nutrition_days", "food_entries", "hydration_days", "custom_foods", "hyrox_benchmarks", "activities", "daily_health"] as const;
+const CSV_TABLES: Record<string, string> = { workouts: "workouts", sets: "workout_sets", nutrition: "nutrition_days", food: "food_entries", hydration: "hydration_days", activities: "activities", health: "daily_health", scans: "body_scans" };
 
 const FOOD_COLUMNS = ["day", "meal", "name", "brand", "amount_label", "calories", "protein_g", "carbs_g", "fat_g", "sodium_mg", "sugar_g", "fiber_g", "barcode", "source", "created_at"];
 
