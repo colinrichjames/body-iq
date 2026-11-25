@@ -7,6 +7,7 @@ import { btnGhost, btnPrimary, card, field } from "@/components/ui";
 import { isBarcode, scaleFood, type Food } from "@/lib/food";
 import { addFoodEntry } from "./actions";
 import { Scanner } from "./scanner";
+import { Field } from "@/components/field";
 
 export type Recent = { name: string; brand: string | null; calories: number; protein_g: number; carbs_g: number; fat_g: number };
 
@@ -151,6 +152,7 @@ export function FoodAdder({ day, recents }: { day: string; recents: Recent[] }) 
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), void search())}
+              aria-label="Search a food or type a barcode"
               placeholder="Search a food or type a barcode"
               className={field}
             />
@@ -237,15 +239,15 @@ export function FoodAdder({ day, recents }: { day: string; recents: Recent[] }) 
       {manual && (
         <form action={submitManual} className="mt-4 space-y-3">
           {manual.barcode && <p className="text-xs text-zinc-500">Barcode {manual.barcode}</p>}
-          <input name="name" required placeholder="Food name" className={field} />
-          <input name="brand" placeholder="Brand (optional)" className={field} />
-          <input name="serving_label" placeholder="One serving is, e.g. 1 bar or 40 g" className={field} />
+          <Field label="Food name"><input name="name" required className={field} /></Field>
+          <Field label="Brand (optional)"><input name="brand" className={field} /></Field>
+          <Field label="Serving size"><input name="serving_label" placeholder="e.g. 1 bar or 40 g" className={field} /></Field>
           <p className="text-xs text-zinc-500">Nutrition per one serving:</p>
           <div className="grid grid-cols-2 gap-3">
-            <input name="calories" type="number" inputMode="decimal" step="any" min="0" required placeholder="Calories" className={field} />
-            <input name="protein_g" type="number" inputMode="decimal" step="any" min="0" placeholder="Protein (g)" className={field} />
-            <input name="carbs_g" type="number" inputMode="decimal" step="any" min="0" placeholder="Carbs (g)" className={field} />
-            <input name="fat_g" type="number" inputMode="decimal" step="any" min="0" placeholder="Fat (g)" className={field} />
+            <Field label="Calories"><input name="calories" type="number" inputMode="decimal" step="any" min="0" required className={field} /></Field>
+            <Field label="Protein (g)"><input name="protein_g" type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
+            <Field label="Carbs (g)"><input name="carbs_g" type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
+            <Field label="Fat (g)"><input name="fat_g" type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
           </div>
           <input name="servings" type="number" inputMode="decimal" step="0.25" min="0.25" defaultValue="1" className={field} aria-label="Servings eaten" />
           <label className="flex items-center gap-2 text-sm text-zinc-300">

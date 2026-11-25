@@ -9,6 +9,7 @@ import { quickAdd, saveTargets } from "./actions";
 import { Importer } from "./importer";
 import { ConfirmForm } from "@/components/confirm-form";
 import { SubmitButton } from "@/components/submit-button";
+import { Field } from "@/components/field";
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
@@ -85,10 +86,10 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
         <p className="text-sm text-zinc-500">Type in a day&apos;s totals. Replaces anything already logged for that date.</p>
         <div className="grid grid-cols-2 gap-3">
           <input name="day" type="date" defaultValue={today} required className={field} />
-          <input name="calories" type="number" inputMode="numeric" placeholder="Calories" required className={field} />
-          <input name="protein_g" type="number" inputMode="decimal" placeholder="Protein (g)" className={field} />
-          <input name="carbs_g" type="number" inputMode="decimal" placeholder="Carbs (g)" className={field} />
-          <input name="fat_g" type="number" inputMode="decimal" placeholder="Fat (g)" className={field} />
+          <Field label="Calories"><input name="calories" type="number" inputMode="numeric" required className={field} /></Field>
+          <Field label="Protein (g)"><input name="protein_g" type="number" inputMode="decimal" className={field} /></Field>
+          <Field label="Carbs (g)"><input name="carbs_g" type="number" inputMode="decimal" className={field} /></Field>
+          <Field label="Fat (g)"><input name="fat_g" type="number" inputMode="decimal" className={field} /></Field>
         </div>
         <SubmitButton className={`${btnGhost} w-full`}>Save day</SubmitButton>
       </ConfirmForm>
@@ -99,19 +100,19 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
         <fieldset className="space-y-2">
           <legend className="text-sm text-zinc-300">Training day</legend>
           <div className="grid grid-cols-2 gap-3">
-            <input name="calorie_target" type="number" inputMode="numeric" placeholder="Calories" defaultValue={profile?.calorie_target ?? ""} className={field} />
-            <input name="protein_target_g" type="number" inputMode="numeric" placeholder="Protein (g)" defaultValue={profile?.protein_target_g ?? ""} className={field} />
-            <input name="carbs_target_g" type="number" inputMode="numeric" placeholder="Carbs (g)" defaultValue={profile?.carbs_target_g ?? ""} className={field} />
-            <input name="fat_target_g" type="number" inputMode="numeric" placeholder="Fat (g)" defaultValue={profile?.fat_target_g ?? ""} className={field} />
+            <Field label="Calories"><input name="calorie_target" type="number" inputMode="numeric" defaultValue={profile?.calorie_target ?? ""} className={field} /></Field>
+            <Field label="Protein (g)"><input name="protein_target_g" type="number" inputMode="numeric" defaultValue={profile?.protein_target_g ?? ""} className={field} /></Field>
+            <Field label="Carbs (g)"><input name="carbs_target_g" type="number" inputMode="numeric" defaultValue={profile?.carbs_target_g ?? ""} className={field} /></Field>
+            <Field label="Fat (g)"><input name="fat_target_g" type="number" inputMode="numeric" defaultValue={profile?.fat_target_g ?? ""} className={field} /></Field>
           </div>
         </fieldset>
         <fieldset className="space-y-2">
           <legend className="text-sm text-zinc-300">Rest day</legend>
           <div className="grid grid-cols-2 gap-3">
-            <input name="rest_calorie_target" type="number" inputMode="numeric" placeholder="Calories" defaultValue={profile?.rest_calorie_target ?? ""} className={field} />
-            <input name="rest_protein_g" type="number" inputMode="numeric" placeholder="Protein (g)" defaultValue={profile?.rest_protein_g ?? ""} className={field} />
-            <input name="rest_carbs_g" type="number" inputMode="numeric" placeholder="Carbs (g)" defaultValue={profile?.rest_carbs_g ?? ""} className={field} />
-            <input name="rest_fat_g" type="number" inputMode="numeric" placeholder="Fat (g)" defaultValue={profile?.rest_fat_g ?? ""} className={field} />
+            <Field label="Calories"><input name="rest_calorie_target" type="number" inputMode="numeric" defaultValue={profile?.rest_calorie_target ?? ""} className={field} /></Field>
+            <Field label="Protein (g)"><input name="rest_protein_g" type="number" inputMode="numeric" defaultValue={profile?.rest_protein_g ?? ""} className={field} /></Field>
+            <Field label="Carbs (g)"><input name="rest_carbs_g" type="number" inputMode="numeric" defaultValue={profile?.rest_carbs_g ?? ""} className={field} /></Field>
+            <Field label="Fat (g)"><input name="rest_fat_g" type="number" inputMode="numeric" defaultValue={profile?.rest_fat_g ?? ""} className={field} /></Field>
           </div>
         </fieldset>
         <SubmitButton className={`${btnGhost} w-full`}>Save targets</SubmitButton>

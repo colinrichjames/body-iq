@@ -7,6 +7,7 @@ import { btnPrimary, field } from "@/components/ui";
 import type { Workout } from "@/lib/types";
 import { updateWorkout } from "../../actions";
 import { ExerciseEditor } from "../../exercise-editor";
+import { Field } from "@/components/field";
 
 export default async function EditWorkoutPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
@@ -33,21 +34,21 @@ export default async function EditWorkoutPage({ params, searchParams }: { params
               </option>
             ))}
           </select>
-          <input name="planned_duration_min" type="number" inputMode="numeric" min="1" defaultValue={w.planned_duration_min ?? ""} placeholder="Minutes" className={field} />
+          <Field label="Minutes"><input name="planned_duration_min" type="number" inputMode="numeric" min="1" defaultValue={w.planned_duration_min ?? ""} className={field} /></Field>
         </div>
         <div className="grid grid-cols-[1fr_auto] gap-3">
-          <input name="planned_distance" type="number" inputMode="decimal" step="any" min="0" defaultValue={w.planned_distance_km ? fromKm(w.planned_distance_km, w.distance_unit) : ""} placeholder="Distance (optional)" className={field} aria-label="Planned distance" />
+          <Field label="Planned distance (optional)"><input name="planned_distance" type="number" inputMode="decimal" step="any" min="0" defaultValue={w.planned_distance_km ? fromKm(w.planned_distance_km, w.distance_unit) : ""} className={field} /></Field>
           <select name="distance_unit" defaultValue={w.distance_unit} className={field} aria-label="Distance unit">
             <option value="mi">mi</option>
             <option value="km">km</option>
           </select>
         </div>
         <input name="workout_date" type="date" defaultValue={w.workout_date} required className={field} />
-        <textarea name="description" rows={4} defaultValue={w.description ?? ""} placeholder="Notes and details" className={field} />
+        <Field label="Notes and details"><textarea name="description" rows={4} defaultValue={w.description ?? ""} className={field} /></Field>
         <ExerciseEditor initial={s?.exercises ?? []} />
         <div className="grid grid-cols-2 gap-3">
-          <input name="rounds" type="number" inputMode="numeric" min="1" defaultValue={s?.rounds ?? ""} placeholder="Circuit rounds" className={field} />
-          <input name="rest_sec" type="number" inputMode="numeric" min="0" defaultValue={s?.rest_sec ?? ""} placeholder="Rest seconds" className={field} />
+          <Field label="Circuit rounds"><input name="rounds" type="number" inputMode="numeric" min="1" defaultValue={s?.rounds ?? ""} className={field} /></Field>
+          <Field label="Rest seconds"><input name="rest_sec" type="number" inputMode="numeric" min="0" defaultValue={s?.rest_sec ?? ""} className={field} /></Field>
         </div>
         {s?.blocks && s.blocks.length > 0 && <p className="text-xs text-zinc-500">This session&apos;s timed blocks are kept as they are.</p>}
         <p className="text-xs text-zinc-500">Saving marks this session as yours, so plan re-alignment won&apos;t overwrite it.</p>

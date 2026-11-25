@@ -94,7 +94,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       ) : (
         <>
           <form className="mt-4">
-            <input name="q" defaultValue={q ?? ""} placeholder="Search exercises" className={field} />
+            <input name="q" defaultValue={q ?? ""} aria-label="Search exercises" placeholder="Search exercises" className={field} />
           </form>
           {(partial ?? []).length > 0 && (
             <>

@@ -125,6 +125,7 @@ export default async function DashboardPage() {
               inputMode="email"
               autoComplete="email"
               required
+              aria-label="Email address"
               placeholder="you@example.com"
               className="min-w-0 flex-1 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-base outline-none placeholder:text-zinc-600 focus:border-emerald-500"
             />

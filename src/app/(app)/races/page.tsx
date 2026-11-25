@@ -8,6 +8,7 @@ import { getToday } from "@/lib/today";
 import type { Race } from "@/lib/types";
 import { btnGhost, btnPrimary, card, field } from "@/components/ui";
 import { addRace, deleteRace, regeneratePlan } from "./actions";
+import { Field } from "@/components/field";
 
 export default async function RacesPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
@@ -36,7 +37,7 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
 
       <form action={addRace} className={`${card} mt-6 space-y-3`}>
         <h2 className="font-medium">Add a race</h2>
-        <input name="name" placeholder="Race name" required className={field} />
+        <Field label="Race name"><input name="name" required className={field} /></Field>
         <select name="race_type" defaultValue="marathon" className={field}>
           {RACE_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
@@ -48,16 +49,16 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
           Race date
           <input name="race_date" type="date" required min={today} className={`${field} mt-1`} />
         </label>
-        <input name="location" placeholder="Location (optional)" className={field} />
+        <Field label="Location (optional)"><input name="location" className={field} /></Field>
         <div className="grid grid-cols-2 gap-3">
           <select name="priority" defaultValue="A" className={field} aria-label="Priority">
             <option value="A">A race</option>
             <option value="B">B race</option>
             <option value="C">C race</option>
           </select>
-          <input name="goal_time" placeholder="Goal time, e.g. 1:20:00" className={field} />
+          <Field label="Goal time (optional)"><input name="goal_time" placeholder="e.g. 1:20:00" className={field} /></Field>
         </div>
-        <input name="goal" placeholder="Other goals (optional)" className={field} />
+        <Field label="Other goals (optional)"><input name="goal" className={field} /></Field>
         <label className="flex items-center gap-2 text-sm text-zinc-300">
           <input name="generate" type="checkbox" defaultChecked className="size-4 accent-emerald-500" />
           Generate a training plan

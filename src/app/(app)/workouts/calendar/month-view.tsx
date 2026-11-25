@@ -8,6 +8,7 @@ import { formatDay } from "@/lib/dates";
 import { SPORT_DOT } from "@/lib/sport";
 import { useDragMove } from "@/components/use-drag-move";
 import { StatusBadge } from "@/components/status-badge";
+import { MoveControl } from "@/components/move-control";
 import { card } from "@/components/ui";
 import { rescheduleWorkout } from "../actions";
 
@@ -103,7 +104,7 @@ export function MonthView({
             <>
               <ul className="mt-2 divide-y divide-zinc-800">
                 {selected.map((w) => (
-                  <li key={w.id} className={`flex items-center gap-2 ${dragging === w.id ? "opacity-40" : ""}`}>
+                  <li key={w.id} className={`flex flex-wrap items-center gap-2 ${dragging === w.id ? "opacity-40" : ""}`}>
                     <span {...grip(w.id, w.title, sel)} aria-label={`Drag ${w.title}`} className="flex h-9 w-9 shrink-0 cursor-grab select-none items-center justify-center text-zinc-500">
                       ⠿
                     </span>
@@ -114,10 +115,11 @@ export function MonthView({
                       </span>
                       <StatusBadge status={w.status} overdue={sel < today} />
                     </Link>
+                    <MoveControl title={w.title} current={w.date} onMove={(d) => void move(w.id, d)} />
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-xs text-zinc-600">Drag the handle onto a day in the calendar to move it.</p>
+              <p className="mt-2 text-xs text-zinc-600">Drag the handle onto a day, or press Move, to put it on another day.</p>
             </>
           )}
           <Link href={`/workouts/new?date=${sel}`} className="mt-3 inline-block text-sm text-emerald-400">
