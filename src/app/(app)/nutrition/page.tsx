@@ -2,12 +2,12 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { addDays, formatDay } from "@/lib/dates";
 import { getToday } from "@/lib/today";
-import { targetsFor } from "@/lib/targets";
+import { macroMismatch, targetsFor } from "@/lib/targets";
 import type { NutritionDay, Profile, Workout } from "@/lib/types";
 import { btnGhost, card, field } from "@/components/ui";
 import { quickAdd, saveTargets } from "./actions";
 import { Importer } from "./importer";
-import { ConfirmForm } from "@/components/confirm-form";
+import { DraftForm } from "@/components/draft-form";
 import { SubmitButton } from "@/components/submit-button";
 import { Field } from "@/components/field";
 
@@ -48,7 +48,7 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
       <section className={`${card} mt-5`}>
         <h2 className="text-sm text-zinc-400">Average vs target</h2>
         {week.length === 0 ? (
-          <p className="mt-2 text-sm text-zinc-500">No food logged in the last 7 days. Import a MyFitnessPal export below.</p>
+          <p className="mt-2 text-sm text-zinc-500">No food logged in the last 7 days. Log food, import a MyFitnessPal export or quick add a day below.</p>
         ) : (
           <>
             <div className="mt-3 grid grid-cols-2 gap-4">
@@ -74,26 +74,18 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
 
       <Importer />
 
-      <ConfirmForm
-        action={quickAdd}
-        className={`${card} mt-6 space-y-3`}
-        dateField="day"
-        draftKey="nutrition-quick-add"
-        existingDays={rows.filter((d) => (d.calories ?? 0) > 0).map((d) => d.day)}
-        windowStart={since}
-        message="Replace what's already logged for {day}? This overwrites that day's totals."
-      >
+      <DraftForm action={quickAdd} draftKey="nutrition-quick-add" className={`${card} mt-6 space-y-3`}>
         <h2 className="font-medium">Quick add a day</h2>
-        <p className="text-sm text-zinc-500">Type in a day&apos;s totals. Replaces anything already logged for that date.</p>
+        <p className="text-sm text-zinc-500">Type in a day&apos;s totals. They go into your food log as one &quot;Quick add&quot; line for that date (replacing an earlier quick add). Foods you logged that day stay.</p>
         <div className="grid grid-cols-2 gap-3">
-          <input name="day" type="date" defaultValue={today} required className={field} />
+          <Field label="Date" className="col-span-2"><input name="day" type="date" defaultValue={today} required className={field} /></Field>
           <Field label="Calories"><input name="calories" type="number" inputMode="numeric" required className={field} /></Field>
           <Field label="Protein (g)"><input name="protein_g" type="number" inputMode="decimal" className={field} /></Field>
           <Field label="Carbs (g)"><input name="carbs_g" type="number" inputMode="decimal" className={field} /></Field>
           <Field label="Fat (g)"><input name="fat_g" type="number" inputMode="decimal" className={field} /></Field>
         </div>
-        <SubmitButton className={`${btnGhost} w-full`}>Save day</SubmitButton>
-      </ConfirmForm>
+        <SubmitButton className={`${btnGhost} w-full`}>Add to food log</SubmitButton>
+      </DraftForm>
 
       <form action={saveTargets} className={`${card} mt-6 space-y-4`}>
         <h2 className="font-medium">Daily targets</h2>
@@ -116,6 +108,17 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
             <Field label="Fat (g)"><input name="rest_fat_g" type="number" inputMode="numeric" defaultValue={profile?.rest_fat_g ?? ""} className={field} /></Field>
           </div>
         </fieldset>
+        {[
+          { label: "training day", t: { calories: profile?.calorie_target ?? null, protein: profile?.protein_target_g ?? null, carbs: profile?.carbs_target_g ?? null, fat: profile?.fat_target_g ?? null } },
+          { label: "rest day", t: { calories: profile?.rest_calorie_target ?? null, protein: profile?.rest_protein_g ?? null, carbs: profile?.rest_carbs_g ?? null, fat: profile?.rest_fat_g ?? null } },
+        ].map((x) => {
+          const m = macroMismatch(x.t);
+          return m ? (
+            <p key={x.label} className="rounded-xl border border-amber-900 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+              {x.label[0].toUpperCase() + x.label.slice(1)}: {m} Adjust one so they agree.
+            </p>
+          ) : null;
+        })}
         <SubmitButton className={`${btnGhost} w-full`}>Save targets</SubmitButton>
       </form>
 
@@ -136,7 +139,7 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
           <tbody className="divide-y divide-zinc-900">
             {rows.map((d) => (
               <tr key={d.day}>
-                <td className="py-2 text-zinc-400">{formatDay(d.day)}</td>
+                <td className="py-2"><Link href={`/nutrition/log?d=${d.day}`} className="text-zinc-400 underline-offset-2 active:underline">{formatDay(d.day)}</Link></td>
                 <td className="py-2 text-right">{Math.round(d.calories ?? 0)}</td>
                 <td className="py-2 text-right">{Math.round(d.protein_g ?? 0)}</td>
                 <td className="py-2 text-right">{Math.round(d.carbs_g ?? 0)}</td>

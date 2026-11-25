@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { isIsoDate } from "@/lib/dates";
+import { syncFoodDay } from "@/lib/food-sync";
 import type { NutritionRow } from "@/lib/mfp";
 
 function targetOrNull(v: FormDataEntryValue | null): number | null {
@@ -34,30 +35,45 @@ export async function saveTargets(formData: FormData) {
   redirect(flash("/nutrition", "Targets saved."));
 }
 
-export async function importNutrition(rows: NutritionRow[]): Promise<{ error: string | null; count: number }> {
+/**
+ * Import MyFitnessPal day totals into the one food log (as a "day total" entry per day, in Other). Days that already
+ * have foods logged here are skipped so nothing is counted twice; re-importing replaces earlier imported totals.
+ */
+export async function importNutrition(rows: NutritionRow[]): Promise<{ error: string | null; count: number; skipped?: number }> {
   const { supabase, userId } = await requireUser();
-  const clean = rows
-    .filter((r) => isIsoDate(r.day))
-    .slice(0, 800)
-    .map((r) => ({
+  const clean = rows.filter((r) => isIsoDate(r.day)).slice(0, 800);
+  if (clean.length === 0) return { error: "Nothing to import.", count: 0 };
+
+  const days = [...new Set(clean.map((r) => r.day))];
+  const { data: busy } = await supabase.from("food_entries").select("day").in("day", days).eq("source", "logged");
+  const busyDays = new Set((busy ?? []).map((r) => r.day as string));
+  const take = clean.filter((r) => !busyDays.has(r.day));
+  const takeDays = [...new Set(take.map((r) => r.day))];
+  if (takeDays.length === 0) return { error: null, count: 0, skipped: busyDays.size };
+
+  await supabase.from("food_entries").delete().in("day", takeDays).eq("source", "myfitnesspal");
+  const { error } = await supabase.from("food_entries").insert(
+    take.map((r) => ({
       user_id: userId,
       day: r.day,
-      calories: r.calories,
-      protein_g: r.protein_g,
-      carbs_g: r.carbs_g,
-      fat_g: r.fat_g,
+      meal: "other",
+      name: "MyFitnessPal (day total)",
+      amount_label: "whole day",
+      calories: r.calories ?? 0,
+      protein_g: r.protein_g ?? 0,
+      carbs_g: r.carbs_g ?? 0,
+      fat_g: r.fat_g ?? 0,
       sodium_mg: r.sodium_mg,
       sugar_g: r.sugar_g,
       fiber_g: r.fiber_g,
       source: "myfitnesspal",
-    }));
-  if (clean.length === 0) return { error: "Nothing to import.", count: 0 };
-
-  const { error } = await supabase.from("nutrition_days").upsert(clean, { onConflict: "user_id,day" });
+    })),
+  );
   if (error) return { error: error.message, count: 0 };
+  for (const d of takeDays) await syncFoodDay(supabase, userId, d);
 
   revalidatePath("/", "layout");
-  return { error: null, count: clean.length };
+  return { error: null, count: takeDays.length, skipped: busyDays.size };
 }
 
 function macro(v: FormDataEntryValue | null): number | null {
@@ -67,7 +83,10 @@ function macro(v: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) && n >= 0 && n < 20000 ? n : null;
 }
 
-/** Quick-add: set a day's totals by hand (scope N-4). Overwrites that day. */
+/**
+ * Quick add: a day total typed by hand. It goes into the food log as one "Quick add" entry (Other), replacing an earlier
+ * quick add for that day. Foods you logged stay, and the day's totals are the sum of everything.
+ */
 export async function quickAdd(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const day = String(formData.get("day") ?? "");
@@ -75,19 +94,21 @@ export async function quickAdd(formData: FormData) {
   if (!isIsoDate(day) || calories === null || calories <= 0) {
     redirect(`/nutrition?error=${encodeURIComponent("Enter a date and calories.")}`);
   }
-  const { error } = await supabase.from("nutrition_days").upsert(
-    {
-      user_id: userId,
-      day,
-      calories,
-      protein_g: macro(formData.get("protein_g")),
-      carbs_g: macro(formData.get("carbs_g")),
-      fat_g: macro(formData.get("fat_g")),
-      source: "manual",
-    },
-    { onConflict: "user_id,day" },
-  );
+  await supabase.from("food_entries").delete().eq("day", day).eq("source", "manual");
+  const { error } = await supabase.from("food_entries").insert({
+    user_id: userId,
+    day,
+    meal: "other",
+    name: "Quick add (day total)",
+    amount_label: "whole day",
+    calories,
+    protein_g: macro(formData.get("protein_g")) ?? 0,
+    carbs_g: macro(formData.get("carbs_g")) ?? 0,
+    fat_g: macro(formData.get("fat_g")) ?? 0,
+    source: "manual",
+  });
   if (error) redirect(`/nutrition?error=${encodeURIComponent(error.message)}`);
+  await syncFoodDay(supabase, userId, day);
   revalidatePath("/", "layout");
-  redirect(flash("/nutrition", "Day saved."));
+  redirect(flash(`/nutrition/log?d=${day}`, "Added to your food log."));
 }

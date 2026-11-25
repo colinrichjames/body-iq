@@ -22,3 +22,25 @@ export function targetsFor(day: string, workouts: Workout[], profile: Profile | 
     fat: profile?.rest_fat_g ?? train.fat,
   };
 }
+
+/** Calories implied by macros (protein and carbs 4 per gram, fat 9). */
+export const macroCalories = (protein: number | null, carbs: number | null, fat: number | null) =>
+  protein === null || carbs === null || fat === null ? null : Math.round(protein * 4 + carbs * 4 + fat * 9);
+
+/**
+ * Do the macro targets add up to the calorie target? Returns a plain sentence when they are more than 8% apart
+ * (a few percent is normal rounding), otherwise null.
+ */
+export function macroMismatch(t: DayTargets): string | null {
+  const implied = macroCalories(t.protein, t.carbs, t.fat);
+  if (implied === null || !t.calories) return null;
+  const gap = implied - t.calories;
+  if (Math.abs(gap) / t.calories <= 0.08) return null;
+  return `Your protein, carbs and fat add up to ${implied.toLocaleString("en-US")} calories, ${Math.abs(gap).toLocaleString("en-US")} ${gap > 0 ? "more" : "fewer"} than the ${t.calories.toLocaleString("en-US")} target.`;
+}
+
+/** How many left or over, in words: "320 left" or "150 over". */
+export const remainingText = (target: number, eaten: number, unit = "") => {
+  const diff = Math.round(target - eaten);
+  return diff >= 0 ? `${diff}${unit} left` : `${-diff}${unit} over`;
+};
