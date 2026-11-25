@@ -16,7 +16,7 @@ All-in-one training and nutrition hub for triathlon and strength training. Pulls
 ## Setup
 
 ### 1. Database
-Apply `supabase/migrations/20261125000000_init_profiles_body_scans.sql` to the Supabase project, either by merging to the branch the Supabase GitHub integration watches, or by pasting it into the Supabase SQL editor.
+Apply `supabase/migrations/20261125175810_init_profiles_body_scans.sql` to the Supabase project, either by merging to the branch the Supabase GitHub integration watches, or by pasting it into the Supabase SQL editor.
 
 The migration enables RLS on every table and grants access to the `authenticated` role only, so it works whether or not "Grant API access to new tables automatically" was left on when the project was created.
 
