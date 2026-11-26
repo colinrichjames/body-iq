@@ -44,3 +44,32 @@ describe("Body IQ score", () => {
     expect(computeInsights(base).categories.every((c) => c.score !== null || !!c.missing)).toBe(true);
   });
 });
+
+import { presentScore } from "./insights";
+
+describe("presentScore", () => {
+  it("shows no number with 1 or 2 categories, and says how many more areas are needed", () => {
+    const one = presentScore({ score: 93, available: 1 });
+    expect(one.value).toBeNull();
+    expect(one.provisional).toBe(true);
+    expect(one.basis).toBe("Based on 1 of 5 categories");
+    expect(one.hint).toBe("Add data in 2 more areas to see your score.");
+    expect(presentScore({ score: 100, available: 2 }).value).toBeNull();
+    expect(presentScore({ score: 100, available: 2 }).hint).toBe("Add data in 1 more area to see your score.");
+  });
+  it("shows the number with a Provisional badge at 3 and 4 categories", () => {
+    for (const n of [3, 4]) {
+      const p = presentScore({ score: 72, available: n });
+      expect(p.value).toBe(72);
+      expect(p.provisional).toBe(true);
+      expect(p.basis).toBe(`Based on ${n} of 5 categories`);
+    }
+  });
+  it("is a normal score at 5 of 5", () => {
+    const p = presentScore({ score: 88, available: 5 });
+    expect(p).toMatchObject({ value: 88, provisional: false, hint: null, basis: "Based on 5 of 5 categories" });
+  });
+  it("shows nothing when there is no score at all", () => {
+    expect(presentScore({ score: null, available: 0 }).value).toBeNull();
+  });
+});
