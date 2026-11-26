@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ConfirmButton } from "@/components/confirm-button";
 import { FirstRunChecklist } from "@/components/first-run-checklist";
 import { requireUser } from "@/lib/auth";
-import { buildChecklist, checklistProgress } from "@/lib/checklist";
+import { buildChecklist } from "@/lib/checklist";
 import { dismissChecklist } from "../dashboard/guest-actions";
 import { GoalCard } from "@/components/goal-card";
 import { loadCoach } from "@/lib/coach-data";
@@ -76,7 +76,7 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-      {!profile?.onboarding_dismissed_at && !checklistProgress(checklist).complete && <FirstRunChecklist items={checklist} dismiss={dismissChecklist} />}
+      {!profile?.onboarding_dismissed_at && checklist.some((i) => !i.done) && <FirstRunChecklist items={checklist} dismiss={dismissChecklist} />}
 
       <GoalCard goal={coach.goal} rate={coach.rate} weightLb={coach.latest?.weight ?? scan?.weight_lb ?? null} proteinTarget={profile?.protein_target_g ?? null} />
 

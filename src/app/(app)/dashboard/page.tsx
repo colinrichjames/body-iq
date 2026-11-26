@@ -48,27 +48,31 @@ export default async function DashboardPage() {
   const [latest, previous] = scans;
   const workouts = workoutsRes.data ?? [];
   const nextRace = racesRes.data?.[0] ?? null;
-  const { data: planRows } = nextRace
-    ? await supabase.from("workouts").select("workout_date,created_at").eq("race_id", nextRace.id).eq("generated", true).returns<{ workout_date: string; created_at: string }[]>()
-    : { data: null };
-  const planStart = planStartFrom(planRows ?? []);
-  const nextPhase = nextRace ? phaseInfo(nextRace.race_type, nextRace.race_date, today, planStart) : null;
   const todays = workouts.filter((w) => w.workout_date === today);
   const health = mergeCheckins(healthRes.data ?? [], checkinRes.data ?? []);
   const todaysCheckin = (checkinRes.data ?? []).find((c) => c.day === today) ?? null;
   const readiness = computeReadiness(health);
-  const deloadCheck = await loadDeload(supabase, today, health);
-  const coach = await loadCoach(supabase, today, profileRes.data ?? null);
-  const { data: finishedRows } = await supabase.from("day_finishes").select("day").gte("day", addDays(today, -400)).returns<{ day: string }[]>();
-  const streak = loggingStreak((finishedRows ?? []).map((r) => r.day), today);
-  const garmin = await loadGarminStatus(supabase);
-  const tz = await getTimeZone();
-  const { data: actRows } = await supabase
-    .from("activities")
-    .select("id,sport,title,started_at,duration_sec,distance_m,avg_hr")
-    .gte("started_at", `${addDays(today, -8)}T00:00:00Z`)
-    .order("started_at", { ascending: false })
-    .returns<Act[]>();
+  // Everything below is independent of each other, so it runs together instead of one round trip after another.
+  const [planRowsRes, deloadCheck, coach, finishedRes, garmin, tz, actRes] = await Promise.all([
+    nextRace
+      ? supabase.from("workouts").select("workout_date,created_at").eq("race_id", nextRace.id).eq("generated", true).returns<{ workout_date: string; created_at: string }[]>()
+      : Promise.resolve({ data: null as { workout_date: string; created_at: string }[] | null }),
+    loadDeload(supabase, today, health),
+    loadCoach(supabase, today, profileRes.data ?? null),
+    supabase.from("day_finishes").select("day").gte("day", addDays(today, -400)).returns<{ day: string }[]>(),
+    loadGarminStatus(supabase),
+    getTimeZone(),
+    supabase
+      .from("activities")
+      .select("id,sport,title,started_at,duration_sec,distance_m,avg_hr")
+      .gte("started_at", `${addDays(today, -8)}T00:00:00Z`)
+      .order("started_at", { ascending: false })
+      .returns<Act[]>(),
+  ]);
+  const planStart = planStartFrom(planRowsRes.data ?? []);
+  const nextPhase = nextRace ? phaseInfo(nextRace.race_type, nextRace.race_date, today, planStart) : null;
+  const streak = loggingStreak((finishedRes.data ?? []).map((r) => r.day), today);
+  const actRows = actRes.data;
   // Seven local days ending today.
   const weekStart = addDays(today, -6);
   const weekActs = (actRows ?? []).filter((a) => dateInTimeZone(tz, new Date(a.started_at)) >= weekStart);
@@ -76,7 +80,7 @@ export default async function DashboardPage() {
   // The Today card already lists planned sessions, so only the nudges it doesn't cover are shown here.
   const reminders = dueReminders({
     today,
-    hour: hourIn(await getTimeZone()),
+    hour: hourIn(tz),
     todays,
     caloriesToday: todayFuel?.calories ?? 0,
     lastScanDay: scans[0]?.scanned_at?.slice(0, 10) ?? null,

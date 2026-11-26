@@ -214,12 +214,12 @@ export function FuelToday({ day, today, finished, streak, targets, totals, meals
           );
         })}
         {(meals.other ?? []).length > 0 && (
-          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3" aria-label="Day totals">
+          <section className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3" aria-label="Quick add, whole day">
             <div className="flex items-center gap-3">
               <span className="text-zinc-400">
                 <Icon name="other" />
               </span>
-              <p className="flex-1 text-lg font-semibold">Day totals</p>
+              <p className="flex-1 text-lg font-semibold">Quick add: whole day</p>
               <p className="text-sm tabular-nums text-zinc-500">{Math.round((meals.other ?? []).reduce((a, i) => a + i.calories, 0))} cal</p>
             </div>
           </section>
