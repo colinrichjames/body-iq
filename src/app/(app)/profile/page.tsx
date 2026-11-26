@@ -7,6 +7,7 @@ import { dismissChecklist } from "../dashboard/guest-actions";
 import { GoalCard } from "@/components/goal-card";
 import { loadCoach } from "@/lib/coach-data";
 import { getToday } from "@/lib/today";
+import { diffDays } from "@/lib/dates";
 import type { BodyScan, Profile } from "@/lib/types";
 import { signOut } from "./actions";
 
@@ -34,7 +35,11 @@ export default async function ProfilePage() {
     supabase.from("garmin_connections").select("user_id", { count: "exact", head: true }),
   ]);
   const profile = profileRes.data ?? null;
-  const coach = await loadCoach(supabase, await getToday(), profile);
+  const today = await getToday();
+  const coach = await loadCoach(supabase, today, profile);
+  const { data: nextRows } = await supabase.from("races").select("name,race_date").gte("race_date", today).order("race_date").limit(1).returns<{ name: string; race_date: string }[]>();
+  const next = nextRows?.[0] ?? null;
+  const raceDetail = next ? `${next.name} · ${diffDays(today, next.race_date)} days` : (raceCount.count ?? 0) > 0 ? "No upcoming races" : "Add a race to build a plan";
   const metric = profile?.unit_system === "metric";
   const scan = scanRes.data?.[0] ?? null;
   const checklist = buildChecklist({
@@ -76,6 +81,7 @@ export default async function ProfilePage() {
       <GoalCard goal={coach.goal} rate={coach.rate} weightLb={coach.latest?.weight ?? scan?.weight_lb ?? null} proteinTarget={profile?.protein_target_g ?? null} />
 
       <ul className="mt-4 divide-y divide-zinc-800 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        <li><Row href="/races" title="Races" detail={raceDetail} /></li>
         <li><Row href="/scans" title="Body" detail={scanSummary} /></li>
         <li><Row href="/settings" title="Settings" detail={`Targets: ${targets} · ${metric ? "Metric" : "Imperial"}`} /></li>
         <li><Row href="/connect" title="Garmin" detail={(garminConn.count ?? 0) > 0 ? "Connected" : "Not connected"} /></li>
