@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import type { Workout, WorkoutSet } from "@/lib/types";
+import { recentNames } from "@/lib/quick-start";
 import { AssistantLoader } from "./assistant-loader";
 import { hyroxBlockTargets } from "@/lib/context";
 import { isHyrox } from "@/lib/hyrox";
@@ -19,6 +20,10 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
   const { data: w } = await supabase.from("workouts").select("*").eq("id", id).maybeSingle<Workout>();
   if (!w) notFound();
   if (w.status === "completed") redirect(`/workouts/${id}`);
+
+  // Recent lifts for the "Add exercise" screen.
+  const { data: recentRows } = await supabase.from("workout_sets").select("exercise").order("created_at", { ascending: false }).limit(300);
+  const recent = recentNames(recentRows ?? []);
 
   // Pre-fill weights from the last time each exercise was logged.
   const names = (w.structure?.exercises ?? []).map((e) => e.name);
@@ -116,5 +121,5 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
     }
   }
 
-  return <AssistantLoader workout={w} lastWeights={lastWeights} lastTime={lastTime} serverResume={serverResume} targets={targets} targetRace={targetRace} lastVolume={lastVolume} suggested={suggested} deload={deload} adaptation={{ headline: adaptation.headline, reasons: adaptation.reasons, mode: adaptation.mode }} initialTotals={adaptedTotals(w, adaptation.setsDelta)} lastEndurance={lastEndurance} plannedDistanceKm={w.planned_distance_km !== null ? Number(w.planned_distance_km) : null} distanceUnit={w.distance_unit ?? "mi"} />;
+  return <AssistantLoader workout={w} recent={recent} lastWeights={lastWeights} lastTime={lastTime} serverResume={serverResume} targets={targets} targetRace={targetRace} lastVolume={lastVolume} suggested={suggested} deload={deload} adaptation={{ headline: adaptation.headline, reasons: adaptation.reasons, mode: adaptation.mode }} initialTotals={adaptedTotals(w, adaptation.setsDelta)} lastEndurance={lastEndurance} plannedDistanceKm={w.planned_distance_km !== null ? Number(w.planned_distance_km) : null} distanceUnit={w.distance_unit ?? "mi"} />;
 }

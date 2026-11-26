@@ -13,7 +13,8 @@ import { fmtPace, fromKm, paceKind, paceLabel, sessionPaceProblem, toKm, type Di
 import { fmtTime } from "@/lib/hyrox";
 import { countSets, recap, totalVolume, volumeByExercise, skipExerciseLogs, skippedLog } from "@/lib/player";
 import { prepareOffline } from "@/lib/offline";
-import { finishWorkout, saveProgress } from "../../actions";
+import { addPlayerExercise, finishWorkout, saveProgress } from "../../actions";
+import { STAPLES } from "@/lib/quick-start";
 
 type Resume = { logs: SetLog[]; blocks: BlockLog[]; stepIndex: number; blockIndex: number; elapsedMs: number; order?: string[]; totals?: Record<string, number> };
 
@@ -45,10 +46,24 @@ const fmt = (totalSec: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
-export function Assistant({ workout, lastWeights, lastTime, serverResume, targets = {}, targetRace = null, lastVolume = {}, suggested = {}, deload = false, adaptation = null, initialTotals = null, lastEndurance = null, plannedDistanceKm = null, distanceUnit = "mi" }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; serverResume: Resume | null; targets?: Record<string, number>; targetRace?: string | null; lastVolume?: Record<string, number>; suggested?: Record<string, { weight: number; text: string }>; deload?: boolean; adaptation?: { headline: string; reasons: string[]; mode: string } | null; initialTotals?: Record<string, number> | null; lastEndurance?: { date: string; km: number | null; minutes: number | null } | null; plannedDistanceKm?: number | null; distanceUnit?: DistUnit }) {
+export function Assistant({ workout: workoutProp, lastWeights: lastWeightsProp, lastTime: lastTimeProp, recent = [], serverResume, targets = {}, targetRace = null, lastVolume = {}, suggested: suggestedProp = {}, deload = false, adaptation = null, initialTotals = null, lastEndurance = null, plannedDistanceKm = null, distanceUnit = "mi" }: { workout: Workout; lastWeights: Record<string, number>; lastTime: Record<string, string>; recent?: string[]; serverResume: Resume | null; targets?: Record<string, number>; targetRace?: string | null; lastVolume?: Record<string, number>; suggested?: Record<string, { weight: number; text: string }>; deload?: boolean; adaptation?: { headline: string; reasons: string[]; mode: string } | null; initialTotals?: Record<string, number> | null; lastEndurance?: { date: string; km: number | null; minutes: number | null } | null; plannedDistanceKm?: number | null; distanceUnit?: DistUnit }) {
   const router = useRouter();
   const { toast } = useToast();
   const warned = useRef(false);
+  // Exercises added while playing (the empty-workout case). They are also saved on the workout; once the server copy
+  // has them, the saved one wins.
+  const [added, setAdded] = useState<{ name: string; sets: number; reps: number }[]>([]);
+  const [addInfo, setAddInfo] = useState<{ lastWeights: Record<string, number>; lastTime: Record<string, string>; suggested: Record<string, { weight: number; text: string }> }>({ lastWeights: {}, lastTime: {}, suggested: {} });
+  const [adding, setAdding] = useState(false);
+  const workout = useMemo<Workout>(() => {
+    const have = workoutProp.structure?.exercises ?? [];
+    const extra = added.filter((a) => !have.some((h) => h.name.toLowerCase() === a.name.toLowerCase()));
+    if (!extra.length) return workoutProp;
+    return { ...workoutProp, structure: { ...(workoutProp.structure ?? {}), exercises: [...have, ...extra] } };
+  }, [workoutProp, added]);
+  const lastWeights = { ...addInfo.lastWeights, ...lastWeightsProp };
+  const lastTime = { ...addInfo.lastTime, ...lastTimeProp };
+  const suggested = { ...addInfo.suggested, ...suggestedProp };
   const blocks = workout.structure?.blocks ?? [];
 
   const draftKey = `bodyiq-draft-${workout.id}`;
@@ -294,6 +309,30 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     advanceTo([...logs, skippedLog(step)], stepIndex + 1, 0);
   }
 
+  async function addExercise(name: string, sets: number, reps: number) {
+    const clean = name.trim();
+    if (!clean) return null;
+    if (steps.some((st) => st.exercise.toLowerCase() === clean.toLowerCase())) return `${clean} is already in this workout.`;
+    const res = await addPlayerExercise(workout.id, clean, sets, reps);
+    if (res.error) return res.error;
+    setAdded((cur) => [...cur, { name: clean, sets, reps }]);
+    setAddInfo((cur) => ({
+      lastWeights: res.lastWeight !== undefined ? { ...cur.lastWeights, [clean]: res.lastWeight } : cur.lastWeights,
+      lastTime: res.lastTime ? { ...cur.lastTime, [clean]: res.lastTime } : cur.lastTime,
+      suggested: res.suggested ? { ...cur.suggested, [clean]: res.suggested } : cur.suggested,
+    }));
+    // Starting from an empty session: land on the first set with the suggested weight filled in.
+    if (steps.length === 0) {
+      setStepIndex(0);
+      const w = res.suggested?.weight ?? res.lastWeight;
+      setWeight(w !== undefined ? String(w) : "");
+      setReps(String(reps));
+    }
+    setAdding(false);
+    toast(`${clean} added.`);
+    return null;
+  }
+
   function skipExercise() {
     if (!step) return;
     const skipped = skipExerciseLogs(steps, stepIndex);
@@ -462,6 +501,9 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     router.push(`/workouts/${workout.id}`);
     router.refresh();
   }
+
+  // ----------------------------------------------------------------- add exercise
+  if (adding) return <AddExercise recent={recent} have={steps.map((st) => st.exercise)} onAdd={addExercise} onCancel={() => setAdding(false)} />;
 
   // ----------------------------------------------------------------- finish
   if (finished) {
@@ -813,6 +855,11 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
           <button onClick={skipExercise} className={btnGhost}>
             Skip exercise
           </button>
+          {workout.sport === "strength" && (
+            <button onClick={() => setAdding(true)} className={`${btnGhost} col-span-2`}>
+              Add exercise
+            </button>
+          )}
         </div>
       </main>
     );
@@ -868,6 +915,11 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
       <div className="flex flex-1 flex-col items-center justify-center text-center">
         {workout.description && <p className="mb-8 whitespace-pre-line text-zinc-400">{workout.description}</p>}
         <p className="text-8xl font-semibold tabular-nums">{fmt(elapsedSec)}</p>
+        {workout.sport === "strength" && (
+          <button onClick={() => setAdding(true)} className={`${btnGhost} mt-8 px-6`}>
+            Add exercise
+          </button>
+        )}
       </div>
       <button onClick={goFinish} className={`${btnPrimary} py-4 text-lg`}>
         Finish
@@ -890,5 +942,58 @@ function Header({ title, elapsed, onQuit, onPause }: { title: string; elapsed: n
         <p className="w-11 text-right text-sm tabular-nums text-zinc-400">{elapsed === null ? "" : fmt(elapsed)}</p>
       </div>
     </header>
+  );
+}
+
+/** Pick an exercise by search (staples plus recent lifts) or type a new one, with sets and reps to start from. */
+function AddExercise({ recent, have, onAdd, onCancel }: { recent: string[]; have: string[]; onAdd: (name: string, sets: number, reps: number) => Promise<string | null>; onCancel: () => void }) {
+  const [q, setQ] = useState("");
+  const [sets, setSets] = useState("3");
+  const [reps, setReps] = useState("10");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const all = [...recent, ...STAPLES.filter((n) => !recent.some((r) => r.toLowerCase() === n.toLowerCase()))].filter((n) => !have.some((h) => h.toLowerCase() === n.toLowerCase()));
+  const shown = q.trim() ? all.filter((n) => q.toLowerCase().split(/\s+/).every((w) => n.toLowerCase().includes(w))) : all;
+  const exact = all.some((n) => n.toLowerCase() === q.trim().toLowerCase());
+
+  async function pick(name: string) {
+    setBusy(true);
+    setError(null);
+    const err = await onAdd(name, Number(sets), Number(reps));
+    setBusy(false);
+    if (err) setError(err);
+  }
+
+  return (
+    <main className="mx-auto w-full max-w-md px-5 py-8">
+      <button onClick={onCancel} className="text-sm text-zinc-400">
+        &larr; Back to workout
+      </button>
+      <h1 className="mt-3 text-2xl font-semibold tracking-tight">Add exercise</h1>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search or type an exercise" aria-label="Search exercises" className={`${field} mt-4`} />
+      <div className="mt-3 flex items-center gap-2 text-sm text-zinc-400">
+        <input aria-label="Sets" type="number" inputMode="numeric" min="1" value={sets} onChange={(e) => setSets(e.target.value)} className="w-14 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1 text-center" />
+        sets ×
+        <input aria-label="Reps" type="number" inputMode="numeric" min="1" value={reps} onChange={(e) => setReps(e.target.value)} className="w-14 rounded-lg border border-zinc-800 bg-zinc-950 px-2 py-1 text-center" />
+        reps
+      </div>
+      {error && <p role="alert" className="mt-3 text-sm text-red-400">{error}</p>}
+      {q.trim() && !exact && (
+        <button disabled={busy} onClick={() => void pick(q)} className={`${btnPrimary} mt-4 w-full`}>
+          Add &ldquo;{q.trim()}&rdquo;
+        </button>
+      )}
+      {recent.length > 0 && !q.trim() && <p className="mt-4 text-xs text-zinc-500">Your recent lifts come first.</p>}
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {shown.map((n) => (
+          <li key={n}>
+            <button disabled={busy} onClick={() => void pick(n)} className="rounded-full border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 active:bg-zinc-800">
+              {n}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {shown.length === 0 && !q.trim() && <p className="mt-3 text-sm text-zinc-500">Type a name to add an exercise.</p>}
+    </main>
   );
 }
