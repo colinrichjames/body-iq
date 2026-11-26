@@ -75,8 +75,8 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
-      <Link href="/dashboard" className="text-sm text-zinc-400">
-        &larr; Home
+      <Link href="/profile" className="text-sm text-zinc-400">
+        &larr; Profile
       </Link>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">Connect Garmin</h1>
       <p className="mt-1 text-sm text-zinc-400">

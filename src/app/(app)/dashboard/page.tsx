@@ -1,7 +1,4 @@
-import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { addDays, diffDays, formatDay } from "@/lib/dates";
 import { computeInsights, SCORE_NAME } from "@/lib/insights";
@@ -20,24 +17,9 @@ import { CheckinCard } from "@/components/checkin-card";
 import { fuelForDay } from "@/lib/fuel";
 import { classify } from "@/lib/intensity";
 import { swapHardSession } from "../workouts/actions";
-import { dismissChecklist, saveGuestAccount } from "./guest-actions";
-import { buildChecklist } from "@/lib/checklist";
-import { FirstRunChecklist } from "@/components/first-run-checklist";
+import { saveGuestAccount } from "./guest-actions";
 import { targetsFor } from "@/lib/targets";
 import type { BodyScan, DailyHealth, NutritionDay, Profile, RecoveryCheckin, Race, SyncRun, Workout } from "@/lib/types";
-
-async function signOut() {
-  "use server";
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getClaims();
-  // A guest leaving takes their data with them.
-  if (data?.claims?.is_anonymous === true) {
-    const { error } = await supabase.rpc("delete_guest_self");
-    if (error) redirect(`/dashboard?notice=${encodeURIComponent("Couldn't clear your guest data, so you're still signed in. Try again.")}`);
-  }
-  await supabase.auth.signOut();
-  redirect("/login");
-}
 
 function delta(latest: number | null, previous: number | null, digits = 1) {
   if (latest === null || previous === null) return null;
@@ -48,7 +30,7 @@ export default async function DashboardPage() {
   const { supabase, userId, email, isGuest } = await requireUser();
   const today = await getToday();
 
-  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, syncRes, raceCount, workoutCount, scanCount, foodCount, garminConn, checkinRes] = await Promise.all([
+  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, syncRes, checkinRes] = await Promise.all([
     supabase.from("body_scans").select("*").order("scanned_at", { ascending: false }).limit(2).returns<BodyScan[]>(),
     supabase.from("workouts").select("*").gte("workout_date", addDays(today, -27)).lte("workout_date", addDays(today, 1)).returns<Workout[]>(),
     supabase.from("nutrition_days").select("*").gte("day", addDays(today, -13)).order("day", { ascending: false }).returns<NutritionDay[]>(),
@@ -56,22 +38,8 @@ export default async function DashboardPage() {
     supabase.from("races").select("*").gte("race_date", today).order("race_date").limit(1).returns<Race[]>(),
     supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(14).returns<DailyHealth[]>(),
     supabase.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(1).returns<SyncRun[]>(),
-    supabase.from("races").select("id", { count: "exact", head: true }),
-    supabase.from("workouts").select("id", { count: "exact", head: true }),
-    supabase.from("body_scans").select("id", { count: "exact", head: true }),
-    supabase.from("food_entries").select("id", { count: "exact", head: true }),
-    supabase.from("garmin_connections").select("user_id", { count: "exact", head: true }),
       supabase.from("recovery_checkins").select("day,sleep_hours,soreness,energy").order("day", { ascending: false }).limit(14).returns<RecoveryCheckin[]>(),
   ]);
-  const checklist = buildChecklist({
-    races: raceCount.count ?? 0,
-    hasTargets: !!profileRes.data?.calorie_target && !!profileRes.data?.protein_target_g,
-    scans: scanCount.count ?? 0,
-    workouts: workoutCount.count ?? 0,
-    foodEntries: foodCount.count ?? 0,
-    garminConnected: (garminConn.count ?? 0) > 0,
-  });
-  const showChecklist = !profileRes.data?.onboarding_dismissed_at;
   const scans = scansRes.data ?? [];
   const [latest, previous] = scans;
   const workouts = workoutsRes.data ?? [];
@@ -120,27 +88,9 @@ export default async function DashboardPage() {
       <header className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium uppercase tracking-widest text-emerald-400">Body IQ</p>
-          <p className="mt-1 truncate text-sm text-zinc-500">{isGuest ? "Guest" : email}</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link href="/settings" className="text-sm text-zinc-400 active:text-zinc-200">
-            Settings
-          </Link>
-          <form action={signOut}>
-            {isGuest ? (
-              <ConfirmButton message="Leave the guest session? Everything you entered as a guest is deleted and can't be restored." className="text-sm text-zinc-400 active:text-zinc-200">
-                Leave guest session
-              </ConfirmButton>
-            ) : (
-              <button type="submit" className="text-sm text-zinc-400 active:text-zinc-200">
-                Sign out
-              </button>
-            )}
-          </form>
+          <Link href="/profile" className="mt-1 block truncate text-sm text-zinc-500">{isGuest ? "Guest" : email}</Link>
         </div>
       </header>
-
-      {showChecklist && <FirstRunChecklist items={checklist} dismiss={dismissChecklist} />}
 
       {isGuest && (
         <section className="mt-4 rounded-2xl border border-amber-700/50 bg-amber-950/20 p-4">
