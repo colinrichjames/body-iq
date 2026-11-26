@@ -28,7 +28,12 @@ describe("training day preferences", () => {
   it("default-like preferences reproduce the default week", () => {
     const base = sessions("run");
     const same = generatePlan({ raceType: "half_marathon", raceName: "R", raceDate: "2027-03-14", startDate: "2027-01-04", prefs: DEFAULT_PREFS });
-    expect(same.map((w) => [w.workout_date, w.title])).toEqual(base.map((w) => [w.workout_date, w.title]));
+    // The default week moves a day's second session to the free Sunday; Mon-Sat preferences have no free day, so that extra is dropped.
+    const key = (w: { workout_date: string; title: string }) => `${w.workout_date}|${w.title}`;
+    const inSame = new Set(same.map(key));
+    const dow = (d: string) => (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
+    expect(same.every((w) => base.some((b) => key(b) === key(w)))).toBe(true);
+    expect(base.filter((w) => !inSame.has(key(w))).every((w) => dow(w.workout_date) === 6)).toBe(true);
   });
   it("puts the long run on the chosen day and keeps sessions on available days only", () => {
     const prefs: TrainingPrefs = { days: [1, 3, 5, 6], longDay: 6 };

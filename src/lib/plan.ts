@@ -411,6 +411,34 @@ export function layoutWeek(template: Draft[][], prefs: TrainingPrefs, family: Fa
   return out;
 }
 
+/**
+ * One session a day, except a triathlon brick (bike then run on purpose). A second session on a day is moved to the
+ * next free training day later in the week, or earlier if none is left. If the week has no free training day, the
+ * extra is dropped, the same as layoutWeek does when there are more sessions than days.
+ */
+export function spreadWeek(week: Draft[][], allowedDays: number[] = [0, 1, 2, 3, 4, 5, 6]): Draft[][] {
+  const out = week.map((d) => [...d]);
+  const valid = [...new Set(allowedDays)].filter((d) => d >= 0 && d <= 6).sort((a, b) => a - b);
+  const allowed = valid.length ? valid : [0, 1, 2, 3, 4, 5, 6];
+  for (let dow = 0; dow < 7; dow++) {
+    if (out[dow].length < 2 || out[dow].some((d) => d.title.startsWith("Brick"))) continue;
+    const [first, ...extras] = out[dow];
+    out[dow] = [first];
+    for (const extra of extras) {
+      const target = [...allowed.filter((d) => d > dow), ...allowed.filter((d) => d < dow).reverse()].find((d) => out[d].length === 0);
+      if (target !== undefined) out[target] = [extra];
+    }
+  }
+  return out;
+}
+
+/** Dates that hold more than one session, ignoring a deliberate brick. Used as a self-check before a plan is saved. */
+export function findDoubleBookings(plan: { workout_date: string; title: string }[]): string[] {
+  const byDay = new Map<string, string[]>();
+  for (const w of plan) byDay.set(w.workout_date, [...(byDay.get(w.workout_date) ?? []), w.title]);
+  return [...byDay].filter(([, t]) => t.length > 1 && !t.some((x) => x.startsWith("Brick"))).map(([d]) => d).sort();
+}
+
 function raceDay(type: RaceType, name: string): Draft {
   const fam = familyOf(type);
   return {
@@ -452,7 +480,8 @@ export function generatePlan(opts: {
 
   for (const week of planWeeks(raceType, startDate, raceDate, taperOverride, opts.others ?? [])) {
     const template = Array.from({ length: 7 }, (_, dow) => sessionsFor(dow, { phase: week.phase, f: week.factor, type: raceType, family }));
-    const laidOut = opts.prefs ? layoutWeek(template, opts.prefs, family) : template;
+    const laid = opts.prefs ? layoutWeek(template, opts.prefs, family) : template;
+    const laidOut = spreadWeek(laid, opts.prefs?.days);
     for (let dow = 0; dow < 7; dow++) {
       const date = addDays(week.weekStart, dow);
       if (date < startDate || date > raceDate) continue;
