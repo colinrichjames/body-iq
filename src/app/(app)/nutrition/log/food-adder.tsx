@@ -7,6 +7,7 @@ import { btnGhost, btnPrimary, card, field } from "@/components/ui";
 import { isBarcode, scaleFood, type Food } from "@/lib/food";
 import { addFoodEntries, addFoodEntry, copyDay, copyMeal, deleteSavedFood, logSavedFood } from "./actions";
 import { RecipeBuilder } from "./recipe-builder";
+import { FoodOverview } from "./food-overview";
 import { perPortion, type MealItem, type SavedFood } from "@/lib/meals";
 import { addDays } from "@/lib/dates";
 import { Scanner } from "./scanner";
@@ -201,7 +202,6 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
     router.refresh();
   }
 
-  const scaled = picked ? scaleFood(picked, Number(servings) > 0 ? Number(servings) : 0) : null;
 
   return (
     <section id="add" className={`${card} mt-5 scroll-mt-4`}>
@@ -251,7 +251,7 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
         </>
       )}
 
-      {note && <p className="mt-3 text-sm text-amber-300">{note}</p>}
+      {note && !picked && <p className="mt-3 text-sm text-amber-300">{note}</p>}
 
       {!picked && !manual && tab === "search" && results.length > 0 && (
         <ul className="mt-3 divide-y divide-zinc-800">
@@ -373,28 +373,8 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
         </div>
       )}
 
-      {picked && scaled && (
-        <div className="mt-4">
-          <p className="font-medium">{picked.name}</p>
-          <p className="text-xs text-zinc-500">
-            {picked.brand ? `${picked.brand} · ` : ""}1 serving = {picked.servingLabel}
-          </p>
-          <label className="mt-3 block text-sm text-zinc-400">
-            Servings
-            <input value={servings} onChange={(e) => setServings(e.target.value)} type="number" inputMode="decimal" step="0.25" min="0.25" className={`${field} mt-1 text-xl`} />
-          </label>
-          <p className="mt-3 text-sm tabular-nums text-zinc-300">
-            {Math.round(scaled.calories)} cal · P {Math.round(scaled.protein_g)} g · C {Math.round(scaled.carbs_g)} g · F {Math.round(scaled.fat_g)} g
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setPicked(null)} className={btnGhost}>
-              Back
-            </button>
-            <button type="button" onClick={() => void submitPicked()} disabled={saving} className={btnPrimary}>
-              {saving ? "Adding..." : `Add to ${meal}`}
-            </button>
-          </div>
-        </div>
+      {picked && (
+        <FoodOverview food={picked} servings={servings} onServings={setServings} meal={meal} meals={MEALS} onMeal={(m) => setMeal(m as (typeof MEALS)[number])} saving={saving} note={note} onLog={() => void submitPicked()} onBack={() => (setPicked(null), setNote(null))} />
       )}
 
       {manual && (
