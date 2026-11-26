@@ -535,7 +535,7 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
                 <label className="text-sm text-zinc-400">
                   Distance
                   <div className="mt-1 flex gap-1">
-                    <input value={distance} onChange={(e) => setDistance(e.target.value)} type="number" inputMode="decimal" step="any" className={`${field} min-w-0`} aria-label="Distance" />
+                    <input value={distance} onChange={(e) => setDistance(e.target.value.replace(",", "."))} type="text" inputMode="decimal" pattern="[0-9]*[.]?[0-9]*" className={`${field} min-w-0`} aria-label="Distance" />
                     <select value={unit} onChange={(e) => setUnit(e.target.value as DistUnit)} className={`${field} w-16 px-1`} aria-label="Distance unit">
                       <option value="mi">mi</option>
                       <option value="km">km</option>
