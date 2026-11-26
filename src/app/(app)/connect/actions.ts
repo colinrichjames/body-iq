@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { addDays } from "@/lib/dates";
 import { getToday } from "@/lib/today";
+import { runGarminSync } from "@/lib/garmin-sync";
 
 const TOKEN_URL = "https://personal.connectapi.garmin.com/personalapitoken-service/personal-api/personal-api-key/token";
 const EXPIRY_DAYS = [30, 90, 180, 365];
@@ -71,34 +72,12 @@ export async function disconnectGarmin() {
   back("notice", "Garmin disconnected and the key was deleted from Body IQ. Delete it in Garmin Connect too if you won't reuse it.");
 }
 
-type SyncResponse = { ok?: boolean; error?: string; days?: number; activities?: number; failed?: string[] };
-
 /** Runs the garmin-sync Edge Function as the signed-in user. */
 export async function syncGarmin(formData: FormData) {
   const { supabase } = await requireUser();
   const days = Math.min(30, Math.max(1, Math.round(Number(formData.get("days")) || 7)));
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  if (!token) redirect("/login");
-
-  let result: SyncResponse = {};
-  try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/garmin-sync`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ days }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(55_000),
-    });
-    result = (await res.json().catch(() => ({}))) as SyncResponse;
-    if (!res.ok && !result.error) result.error = `Sync failed (HTTP ${res.status}).`;
-  } catch {
-    result = { error: "The sync took too long or couldn't be reached. Check the sync details below and try again." };
-  }
+  const result = await runGarminSync(supabase, days);
+  if ("notSignedIn" in result) redirect("/login");
 
   revalidatePath("/", "layout");
   if (result.error) back("error", result.error);
