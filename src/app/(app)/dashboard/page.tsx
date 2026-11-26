@@ -23,6 +23,7 @@ import { GarminSyncCard } from "@/components/garmin-sync-card";
 import { loadGarminStatus } from "@/lib/garmin-status";
 import { saveGuestAccount } from "./guest-actions";
 import { targetsFor } from "@/lib/targets";
+import { fuelGuidance } from "@/lib/fuel-guidance";
 import type { BodyScan, DailyHealth, NutritionDay, Profile, RecoveryCheckin, Race, Workout } from "@/lib/types";
 
 function delta(latest: number | null, previous: number | null, digits = 1) {
@@ -83,6 +84,7 @@ export default async function DashboardPage() {
   const fuelTargets = targetsFor(today, workouts, profileRes.data ?? null);
   const weightKg = latest?.weight_lb ? latest.weight_lb * 0.45359237 : null;
   const dayFuel = fuelForDay(today, workouts, weightKg, nextRace?.race_date ?? null, nextRace?.race_type ?? null);
+  const fuelText = fuelGuidance(fuelTargets, todayFuel ? { calories: todayFuel.calories ?? 0, protein: todayFuel.protein_g ?? 0, carbs: todayFuel.carbs_g ?? 0 } : null, dayFuel);
   const hardToday = todays.find((w) => w.status === "planned" && classify(w).level === "hard") ?? null;
   const swapNeeded = readiness && readiness.status !== "green" && hardToday ? hardToday : null;
   const insights = computeInsights({
@@ -202,11 +204,11 @@ export default async function DashboardPage() {
             </Link>
           </p>
         )}
-        <p className="mt-3 text-xs text-zinc-500">
-          Carbs scale with the day&apos;s work: {dayFuel.carbsPerKg[0]}-{dayFuel.carbsPerKg[1]} g/kg
-          {dayFuel.carbsG ? ` (about ${dayFuel.carbsG[0]}-${dayFuel.carbsG[1]} g)` : " (log a body scan to see grams)"}, protein {dayFuel.proteinPerKg[0]}-{dayFuel.proteinPerKg[1]} g/kg
-          {dayFuel.proteinG ? ` (${dayFuel.proteinG[0]}-${dayFuel.proteinG[1]} g)` : ""}. That is a performance range. If you&apos;re cutting, your own targets above take priority; use the day type to shift carbs up or down.
-        </p>
+        {fuelText.lines.map((l, i) => (
+          <p key={i} className={`text-xs ${i === 0 ? "mt-3" : "mt-1"} text-zinc-500`}>
+            {l}
+          </p>
+        ))}
         {dayFuel.note && <p className="mt-2 text-xs text-zinc-400">{dayFuel.note}</p>}
         {streak.current > 0 && <p className="mt-2 text-xs text-zinc-400">Logging streak: {streak.current} day{streak.current === 1 ? "" : "s"}{streak.todayDone ? "" : ". Finish today to extend it"}.</p>}
       </section>
