@@ -258,3 +258,35 @@ export function computeInsights(input: {
     bullets,
   };
 }
+
+/** Categories that must have data before the score is shown as a number. */
+export const MIN_CATEGORIES_FOR_SCORE = 3;
+export const TOTAL_CATEGORIES = 5;
+
+export type ScorePresentation = {
+  /** The number to show, or null to show "--". */
+  value: number | null;
+  /** True until all five categories have data: the score may still swing as data is added. */
+  provisional: boolean;
+  /** "Based on 2 of 5 categories", always present. */
+  basis: string;
+  /** What to do next, when the score isn't shown or is still provisional. */
+  hint: string | null;
+};
+
+/**
+ * How the score is presented, without changing the formula. Under 3 of 5 categories there is no number (a score from one
+ * or two inputs swings wildly and reads as a judgement). From 3 to 4 it is shown but badged Provisional. At 5 it is normal.
+ */
+export function presentScore(i: { score: number | null; available: number }): ScorePresentation {
+  const basis = `Based on ${i.available} of ${TOTAL_CATEGORIES} categories`;
+  if (i.score === null || i.available < MIN_CATEGORIES_FOR_SCORE) {
+    const more = Math.max(1, MIN_CATEGORIES_FOR_SCORE - i.available);
+    return { value: null, provisional: true, basis, hint: `Add data in ${more} more area${more === 1 ? "" : "s"} to see your score.` };
+  }
+  if (i.available < TOTAL_CATEGORIES) {
+    const more = TOTAL_CATEGORIES - i.available;
+    return { value: i.score, provisional: true, basis, hint: `Provisional until all five categories have data (${more} to go). It can move either way as you add them.` };
+  }
+  return { value: i.score, provisional: false, basis, hint: null };
+}

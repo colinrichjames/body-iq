@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { addDays, diffDays, formatDay } from "@/lib/dates";
-import { computeInsights, SCORE_NAME } from "@/lib/insights";
+import { computeInsights, presentScore, SCORE_NAME } from "@/lib/insights";
 import { raceLabel } from "@/lib/plan";
 import { phaseInfo, planStartFrom } from "@/lib/race-phase";
 import { raceDayCard } from "@/lib/race-day";
@@ -95,6 +95,7 @@ export default async function DashboardPage() {
     nextRace,
     planStart,
   });
+  const scoreView = presentScore(insights);
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -259,13 +260,15 @@ export default async function DashboardPage() {
       )}
 
       <section className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-        <h2 className="text-sm text-zinc-400">{SCORE_NAME}</h2>
-        <p className={`mt-2 text-4xl font-semibold tabular-nums ${insights.score === null ? "text-zinc-600" : ""}`}>
-          {insights.score ?? "--"}
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm text-zinc-400">{SCORE_NAME}</h2>
+          {scoreView.provisional && <span className="rounded-full border border-amber-700/60 px-2 py-0.5 text-xs text-amber-400">Provisional</span>}
+        </div>
+        <p className={`mt-2 text-4xl font-semibold tabular-nums ${scoreView.value === null ? "text-zinc-600" : ""}`}>
+          {scoreView.value ?? "--"}
         </p>
-        <p className="mt-1 text-xs text-zinc-500">
-          {insights.score === null ? "Not enough data yet. See what each part needs below." : `Based on ${insights.available} of 5 categories. Recalculated every time you open this page.`}
-        </p>
+        <p className="mt-1 text-xs text-zinc-500">{scoreView.basis}. Recalculated every time you open this page.</p>
+        {scoreView.hint && <p className="mt-1 text-xs text-amber-400">{scoreView.hint}</p>}
         <ul className="mt-4 space-y-2">
           {insights.categories.map((c) => (
             <li key={c.key} className="text-sm">
@@ -282,7 +285,7 @@ export default async function DashboardPage() {
           <summary className="cursor-pointer text-sm text-emerald-400">How the {SCORE_NAME} works</summary>
           <p className="mt-2">
             Each category earns points up to its maximum (Nutrition 20, Training 25, Recovery 25, Body composition 20, Activity 10). The score is points earned ÷ points possible, over
-            the categories that have enough data, as a number from 0 to 100. A category with no data is left out, not counted as zero, so adding data can move the score either way.
+            the categories that have enough data, as a number from 0 to 100. A category with no data is left out, not counted as zero, so adding data can move the score either way. That is why it shows no number until 3 of the 5 categories have data and is marked Provisional until all 5 do.
           </p>
           <ul className="mt-2 space-y-2">
             {insights.categories.map((c) => (
