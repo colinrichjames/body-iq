@@ -35,7 +35,10 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Races</h1>
+      <Link href="/profile" className="text-sm text-zinc-400">
+        &larr; Profile
+      </Link>
+      <h1 className="mt-3 text-2xl font-semibold tracking-tight">Races</h1>
       <p className="mt-1 text-sm text-zinc-500">Add a race and a date. Body IQ builds the training plan backwards from race day.</p>
 
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}

@@ -16,9 +16,9 @@ describe("BottomNav", () => {
   it("has an icon and a text label on every tab, with Calendar", () => {
     path = "/dashboard";
     const { container } = render(<BottomNav />);
-    expect(NAV_ITEMS.map((i) => i.label)).toEqual(["Home", "Train", "Calendar", "Races", "Fuel", "Profile"]);
+    expect(NAV_ITEMS.map((i) => i.label)).toEqual(["Home", "Train", "Calendar", "Fuel", "Profile"]);
     const links = container.querySelectorAll("a");
-    expect(links).toHaveLength(6);
+    expect(links).toHaveLength(5);
     links.forEach((a) => {
       expect(a.querySelector("svg")).not.toBeNull();
       expect((a.textContent ?? "").length).toBeGreaterThan(0);
@@ -42,8 +42,8 @@ describe("BottomNav", () => {
   });
 
   it("keeps Profile active on the pages inside it", () => {
-    const profile = NAV_ITEMS[5];
-    for (const p of ["/profile", "/scans", "/settings", "/connect"]) expect(isActive(profile, p)).toBe(true);
+    const profile = NAV_ITEMS[4];
+    for (const p of ["/profile", "/races", "/races/abc", "/scans", "/settings", "/connect"]) expect(isActive(profile, p)).toBe(true);
     expect(isActive(profile, "/nutrition")).toBe(false);
   });
 
