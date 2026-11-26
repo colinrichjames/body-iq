@@ -13,8 +13,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
-      <Link href="/dashboard" className="text-sm text-zinc-400">
-        &larr; Home
+      <Link href="/profile" className="text-sm text-zinc-400">
+        &larr; Profile
       </Link>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">Settings</h1>
       {saved && <p className="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-300">Saved.</p>}

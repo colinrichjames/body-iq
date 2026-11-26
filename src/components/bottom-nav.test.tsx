@@ -16,7 +16,7 @@ describe("BottomNav", () => {
   it("has an icon and a text label on every tab, with Calendar", () => {
     path = "/dashboard";
     const { container } = render(<BottomNav />);
-    expect(NAV_ITEMS.map((i) => i.label)).toEqual(["Home", "Train", "Calendar", "Races", "Fuel", "Body"]);
+    expect(NAV_ITEMS.map((i) => i.label)).toEqual(["Home", "Train", "Calendar", "Races", "Fuel", "Profile"]);
     const links = container.querySelectorAll("a");
     expect(links).toHaveLength(6);
     links.forEach((a) => {
@@ -39,6 +39,12 @@ describe("BottomNav", () => {
     expect(isActive(train, "/workouts/calendar")).toBe(false);
     expect(isActive(NAV_ITEMS[2], "/workouts/calendar")).toBe(true);
     expect(isActive(NAV_ITEMS[0], "/dashboard")).toBe(true);
+  });
+
+  it("keeps Profile active on the pages inside it", () => {
+    const profile = NAV_ITEMS[5];
+    for (const p of ["/profile", "/scans", "/settings", "/connect"]) expect(isActive(profile, p)).toBe(true);
+    expect(isActive(profile, "/nutrition")).toBe(false);
   });
 
   it("hides during a workout", () => {
