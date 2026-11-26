@@ -12,7 +12,8 @@ const actions = vi.hoisted(() => ({
   saveFoodSet: vi.fn(),
 }));
 vi.mock("./actions", () => actions);
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 vi.mock("./scanner", () => ({ Scanner: () => null }));
 import { FoodAdder } from "./food-adder";
 import type { MealItem, SavedFood } from "@/lib/meals";
@@ -66,5 +67,17 @@ describe("FoodAdder tabs", () => {
     mount();
     fireEvent.click(screen.getByRole("tab", { name: "Favourites" }));
     expect(screen.getByText("Protein shake")).toBeTruthy();
+  });
+
+  it("hand-add refreshes the log right away, like search-add", async () => {
+    actions.addFoodEntry.mockResolvedValueOnce({ error: null });
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Add by hand" }));
+    fireEvent.change(screen.getByLabelText("Food name"), { target: { value: "Test banana" } });
+    fireEvent.change(screen.getByLabelText("Calories"), { target: { value: "105" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Add to / }));
+    await waitFor(() => expect(actions.addFoodEntry).toHaveBeenCalledTimes(1));
+    expect(actions.addFoodEntry.mock.calls[0][0]).toMatchObject({ name: "Test banana", calories: 105 });
+    await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
 });

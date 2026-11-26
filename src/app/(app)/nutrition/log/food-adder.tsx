@@ -176,6 +176,8 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
     }
   }
 
+  // Called from a submit handler, not a form action: router.refresh() inside a form action's transition waits until the action
+  // ends, which left the totals stale until a reload.
   async function submitManual(form: FormData) {
     const num = (k: string) => Number(String(form.get(k) ?? "").trim() || 0);
     const sv = Math.max(0.1, Number(String(form.get("servings") ?? "1")) || 1);
@@ -378,7 +380,13 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
       )}
 
       {manual && (
-        <form action={submitManual} className="mt-4 space-y-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submitManual(new FormData(e.currentTarget));
+          }}
+          className="mt-4 space-y-3"
+        >
           {manual.barcode && <p className="text-xs text-zinc-500">Barcode {manual.barcode}</p>}
           <Field label="Food name"><input name="name" required className={field} /></Field>
           <Field label="Brand (optional)"><input name="brand" className={field} /></Field>
