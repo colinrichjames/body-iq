@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatSynced } from "@/lib/garmin-import";
 import { requireUser } from "@/lib/auth";
 import { addDays, diffDays, formatDay } from "@/lib/dates";
 import { computeInsights, presentScore, SCORE_NAME } from "@/lib/insights";
@@ -284,6 +285,16 @@ export default async function DashboardPage() {
               </div>
               <p className="text-xs text-zinc-500">{c.note}</p>
               {c.missing && <p className="text-xs text-amber-400">Missing: {c.missing}</p>}
+              {c.key === "activity" && (
+                garmin.connected ? (
+                  <p className="text-xs text-zinc-500">
+                    {garmin.last ? `Garmin last synced ${formatSynced(garmin.last.finished_at ?? garmin.last.started_at, tz)}${garmin.last.status === "success" ? "" : ` (${garmin.last.status})`}` : "Garmin connected, not synced yet"} ·{" "}
+                    <Link href="/connect" className="text-emerald-400 underline">Manage</Link>
+                  </p>
+                ) : (
+                  <Link href="/connect" className="mt-1 inline-block rounded-lg border border-emerald-700 px-3 py-1 text-xs text-emerald-400">Connect Garmin</Link>
+                )
+              )}
             </li>
           ))}
         </ul>
