@@ -1,3 +1,4 @@
+import { newestScanFirst } from "@/lib/scan-order";
 import Link from "next/link";
 import { ConfirmButton } from "@/components/confirm-button";
 import { FirstRunChecklist } from "@/components/first-run-checklist";
@@ -27,7 +28,7 @@ export default async function ProfilePage() {
   const { supabase, userId, email, isGuest } = await requireUser();
   const [profileRes, scanRes, raceCount, workoutCount, scanCount, foodCount, garminConn] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
-    supabase.from("body_scans").select("*").order("scanned_at", { ascending: false }).limit(1).returns<BodyScan[]>(),
+    newestScanFirst(supabase.from("body_scans").select("*")).limit(1).returns<BodyScan[]>(),
     supabase.from("races").select("id", { count: "exact", head: true }),
     supabase.from("workouts").select("id", { count: "exact", head: true }),
     supabase.from("body_scans").select("id", { count: "exact", head: true }),

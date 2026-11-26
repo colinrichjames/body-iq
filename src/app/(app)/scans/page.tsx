@@ -1,3 +1,4 @@
+import { newestScanFirst } from "@/lib/scan-order";
 import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
@@ -16,11 +17,7 @@ export default async function ScansPage({
 }) {
   const { error } = await searchParams;
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("body_scans")
-    .select("*")
-    .order("scanned_at", { ascending: false })
-    .returns<BodyScan[]>();
+  const { data } = await newestScanFirst(supabase.from("body_scans").select("*")).returns<BodyScan[]>();
   const scans = data ?? [];
   const today = new Date().toISOString().slice(0, 10);
 

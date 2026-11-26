@@ -10,6 +10,8 @@ import { dateInTimeZone, getTimeZone, getToday } from "@/lib/today";
 import { dueReminders, hourIn } from "@/lib/reminders";
 import { computeReadiness, mergeCheckins } from "@/lib/readiness";
 import { loadDeload } from "@/lib/progression-data";
+import { loadNutritionDays } from "@/lib/nutrition-data";
+import { newestScanFirst } from "@/lib/scan-order";
 import { loggingStreak } from "@/lib/food-stats";
 import { CoachCard } from "@/components/coach-card";
 import { loadCoach } from "@/lib/coach-data";
@@ -25,7 +27,7 @@ import { loadGarminStatus } from "@/lib/garmin-status";
 import { saveGuestAccount } from "./guest-actions";
 import { targetsFor } from "@/lib/targets";
 import { fuelGuidance } from "@/lib/fuel-guidance";
-import type { BodyScan, DailyHealth, NutritionDay, Profile, RecoveryCheckin, Race, Workout } from "@/lib/types";
+import type { BodyScan, DailyHealth, Profile, RecoveryCheckin, Race, Workout } from "@/lib/types";
 
 function delta(latest: number | null, previous: number | null, digits = 1) {
   if (latest === null || previous === null) return null;
@@ -37,9 +39,9 @@ export default async function DashboardPage() {
   const today = await getToday();
 
   const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, checkinRes] = await Promise.all([
-    supabase.from("body_scans").select("*").order("scanned_at", { ascending: false }).limit(2).returns<BodyScan[]>(),
+    newestScanFirst(supabase.from("body_scans").select("*")).limit(2).returns<BodyScan[]>(),
     supabase.from("workouts").select("*").gte("workout_date", addDays(today, -27)).lte("workout_date", addDays(today, 1)).returns<Workout[]>(),
-    supabase.from("nutrition_days").select("*").gte("day", addDays(today, -13)).order("day", { ascending: false }).returns<NutritionDay[]>(),
+    loadNutritionDays(supabase, addDays(today, -13)),
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
     supabase.from("races").select("*").gte("race_date", today).order("race_date").limit(1).returns<Race[]>(),
     supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(14).returns<DailyHealth[]>(),
@@ -77,7 +79,7 @@ export default async function DashboardPage() {
   // Seven local days ending today.
   const weekStart = addDays(today, -6);
   const weekActs = (actRows ?? []).filter((a) => dateInTimeZone(tz, new Date(a.started_at)) >= weekStart);
-  const todayFuel = (nutritionRes.data ?? []).find((d) => d.day === today) ?? null;
+  const todayFuel = (nutritionRes).find((d) => d.day === today) ?? null;
   // The Today card already lists planned sessions, so only the nudges it doesn't cover are shown here.
   const reminders = dueReminders({
     today,
@@ -96,7 +98,7 @@ export default async function DashboardPage() {
     today,
     scans,
     workouts,
-    nutrition: nutritionRes.data ?? [],
+    nutrition: nutritionRes,
     health,
     profile: profileRes.data ?? null,
     nextRace,

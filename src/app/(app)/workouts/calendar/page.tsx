@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { addDays, isIsoDate, startOfSundayWeek } from "@/lib/dates";
 import { getToday } from "@/lib/today";
 import { SPORT_DOT, SPORT_NAME } from "@/lib/sport";
+import { displayMinutes } from "@/lib/week";
 import { btnPrimary } from "@/components/ui";
 import { MonthView } from "./month-view";
 import type { Race, Workout } from "@/lib/types";
@@ -77,7 +78,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         today={today}
         sel={sel}
         cells={cells}
-        workouts={(wRes.data ?? []).map((w) => ({ id: w.id, date: w.workout_date, title: w.title, sport: w.sport, status: w.status, minutes: w.planned_duration_min, plan: w.race_id ? (planName.get(w.race_id) ?? "Race plan") : null }))}
+        workouts={(wRes.data ?? []).map((w) => ({ id: w.id, date: w.workout_date, title: w.title, sport: w.sport, status: w.status, minutes: displayMinutes(w), plan: w.race_id ? (planName.get(w.race_id) ?? "Race plan") : null }))}
         raceDays={Object.fromEntries(raceDays)}
       />
 

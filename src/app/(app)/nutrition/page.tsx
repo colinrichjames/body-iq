@@ -1,9 +1,10 @@
+import { loadNutritionDays } from "@/lib/nutrition-data";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { addDays, formatDay, isIsoDate } from "@/lib/dates";
 import { getToday } from "@/lib/today";
 import { macroMismatch, targetsFor } from "@/lib/targets";
-import type { NutritionDay, Profile, Workout } from "@/lib/types";
+import type { Profile, Workout } from "@/lib/types";
 import { btnGhost, card, field } from "@/components/ui";
 import { quickAdd, saveTargets } from "./actions";
 import { Importer } from "./importer";
@@ -24,9 +25,9 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
   const since = addDays(today, -13);
   const day = d && isIsoDate(d) ? d : today;
 
-  const [{ data: profile }, { data: days }, { data: wk }] = await Promise.all([
+  const [{ data: profile }, days, { data: wk }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
-    supabase.from("nutrition_days").select("*").gte("day", since).order("day", { ascending: false }).returns<NutritionDay[]>(),
+    loadNutritionDays(supabase, since),
     supabase.from("workouts").select("*").gte("workout_date", since).lte("workout_date", today).returns<Workout[]>(),
   ]);
   const coach = await loadCoach(supabase, today, profile ?? null);
