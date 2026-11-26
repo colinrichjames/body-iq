@@ -13,6 +13,7 @@ import { planSummary, type PlanResult } from "@/lib/plan-summary";
 import { affectsPlan, raceChanges, type RaceFields } from "@/lib/race-edit";
 import { getToday } from "@/lib/today";
 import type { Race, RaceType } from "@/lib/types";
+import { dbError } from "@/lib/db-error";
 
 function fail(message: string): never {
   redirect(`/races?error=${encodeURIComponent(message)}`);
@@ -32,7 +33,7 @@ async function applyPlan(race: Race): Promise<PlanResult> {
     .eq("status", "planned")
     .gte("workout_date", today)
     .select("id");
-  if (delError) fail(delError.message);
+  if (delError) fail(dbError(delError, true));
 
   // Don't pile onto days where the user already has something (their own sessions or another plan).
   const { data: existing } = await supabase
@@ -70,7 +71,7 @@ async function applyPlan(race: Race): Promise<PlanResult> {
 
   for (let i = 0; i < rows.length; i += 200) {
     const { error } = await supabase.from("workouts").insert(rows.slice(i, i + 200));
-    if (error) fail(error.message);
+    if (error) fail(dbError(error, true));
   }
   const dates = rows.map((r) => r.workout_date).sort();
   const weeks = new Set(rows.map((r) => addDays(r.workout_date, -((new Date(r.workout_date + "T00:00:00Z").getUTCDay() + 6) % 7)))).size;
@@ -204,7 +205,7 @@ export async function addBenchmark(formData: FormData) {
     time_sec: sec,
     notes: String(formData.get("notes") ?? "").trim() || null,
   });
-  if (error) back(error.message);
+  if (error) back(dbError(error, true));
   revalidatePath("/", "layout");
   redirect(flash(`/races/${raceId}`, "Benchmark saved."));
 }
@@ -250,7 +251,7 @@ export async function importPlanRows(raceId: string, rows: PlanCsvRow[]): Promis
     }));
   if (clean.length === 0) return { error: "No valid rows (need date as YYYY-MM-DD and a title).", count: 0 };
   const { error } = await supabase.from("workouts").insert(clean);
-  if (error) return { error: error.message, count: 0 };
+  if (error) return { error: dbError(error, true), count: 0 };
   revalidatePath("/", "layout");
   return { error: null, count: clean.length };
 }
@@ -293,7 +294,7 @@ export async function savePlanPrefs(formData: FormData) {
   const prefs = prefsFromForm(formData);
   if (!prefs) redirect(flash(back, "Pick at least two training days."));
   const { error } = await supabase.from("profiles").upsert({ id: userId, training_prefs: prefs }, { onConflict: "id" });
-  if (error) redirect(flash(back, `Couldn't save your days: ${error.message}`));
+  if (error) redirect(flash(back, `Couldn't save your days. ${dbError(error)}`));
   const { data: race } = await supabase.from("races").select("*").eq("id", raceId).maybeSingle<Race>();
   if (!race) redirect(flash("/races", "Saved your training days."));
   const result = await applyPlan(race);

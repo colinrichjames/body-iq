@@ -8,6 +8,7 @@ import { getToday } from "@/lib/today";
 import { isIsoDate } from "@/lib/dates";
 import { CALORIE_FLOOR } from "@/lib/coach";
 import { GOALS, isGoalType } from "@/lib/goals";
+import { dbError } from "@/lib/db-error";
 
 const BACK = new Set(["/nutrition", "/dashboard", "/profile"]);
 const backOf = (formData: FormData) => {
@@ -25,7 +26,7 @@ export async function logWeighIn(formData: FormData) {
   const today = await getToday();
   const day = isIsoDate(given) && given <= today ? given : today;
   const { error } = await supabase.from("weigh_ins").upsert({ user_id: userId, day, weight_lb: Math.round(weight * 10) / 10, updated_at: new Date().toISOString() }, { onConflict: "user_id,day" });
-  if (error) redirect(flash(back, `Couldn't save your weight: ${error.message}`));
+  if (error) redirect(flash(back, `Couldn't save your weight. ${dbError(error)}`));
   revalidatePath("/", "layout");
   redirect(flash(back, "Weight saved."));
 }
@@ -43,7 +44,7 @@ export async function saveGoal(formData: FormData) {
   const { error } = await supabase
     .from("profiles")
     .upsert({ id: userId, goal_type: goal, goal_mode: g.mode, goal_rate_lb_week: g.mode === "maintain" ? null : rate }, { onConflict: "id" });
-  if (error) redirect(flash(back, `Couldn't save your goal: ${error.message}`));
+  if (error) redirect(flash(back, `Couldn't save your goal. ${dbError(error)}`));
   revalidatePath("/", "layout");
   redirect(flash(back, "Goal saved."));
 }
@@ -71,7 +72,7 @@ export async function applyCoach(formData: FormData) {
     if (p.rest_carbs_g !== null) patch.rest_carbs_g = Math.max(0, p.rest_carbs_g + carbsDelta);
   }
   const { error } = await supabase.from("profiles").upsert(patch, { onConflict: "id" });
-  if (error) redirect(flash(back, `Couldn't update your targets: ${error.message}`));
+  if (error) redirect(flash(back, `Couldn't update your targets. ${dbError(error)}`));
   revalidatePath("/", "layout");
   redirect(flash(back, "Targets updated."));
 }
@@ -81,7 +82,7 @@ export async function keepTargets(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const back = backOf(formData);
   const { error } = await supabase.from("profiles").upsert({ id: userId, coach_checked_at: await getToday() }, { onConflict: "id" });
-  if (error) redirect(flash(back, `Couldn't save that: ${error.message}`));
+  if (error) redirect(flash(back, `Couldn't save that. ${dbError(error)}`));
   revalidatePath("/", "layout");
   redirect(flash(back, "Kept your targets. Next check-in in a week."));
 }

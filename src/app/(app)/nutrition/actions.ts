@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { isIsoDate } from "@/lib/dates";
 import { syncFoodDay } from "@/lib/food-sync";
 import type { NutritionRow } from "@/lib/mfp";
+import { dbError } from "@/lib/db-error";
 
 function targetOrNull(v: FormDataEntryValue | null): number | null {
   const s = String(v ?? "").trim();
@@ -69,7 +70,7 @@ export async function importNutrition(rows: NutritionRow[]): Promise<{ error: st
       source: "myfitnesspal",
     })),
   );
-  if (error) return { error: error.message, count: 0 };
+  if (error) return { error: dbError(error, true), count: 0 };
   for (const d of takeDays) await syncFoodDay(supabase, userId, d);
 
   revalidatePath("/", "layout");
@@ -107,7 +108,7 @@ export async function quickAdd(formData: FormData) {
     fat_g: macro(formData.get("fat_g")) ?? 0,
     source: "manual",
   });
-  if (error) redirect(`/nutrition?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/nutrition?error=${encodeURIComponent(dbError(error, true))}`);
   await syncFoodDay(supabase, userId, day);
   revalidatePath("/", "layout");
   redirect(flash(`/nutrition/log?d=${day}`, "Added to your food log."));
