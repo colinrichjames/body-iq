@@ -19,6 +19,7 @@ import { revertStructure, swapStructure } from "@/lib/hyrox-swaps";
 import { insightsText, sessionInsights } from "@/lib/session-insights";
 import type { BlockLog, SetLog, Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
+import { dbError } from "@/lib/db-error";
 
 const SPORTS: Sport[] = ["strength", "run", "bike", "swim", "hyrox", "mobility", "other"];
 
@@ -64,7 +65,7 @@ export async function addWorkout(formData: FormData) {
     generated: false,
     status: "planned",
   });
-  if (error) back(error.message);
+  if (error) back(dbError(error, true));
 
   refresh();
   redirect(flash(`/workouts?d=${date}`, "Workout added."));
@@ -223,7 +224,7 @@ export async function finishWorkout(input: {
       ...fuelFields(input.fuelCarbsG, input.fluidMl, input.sodiumMg),
     })
     .eq("id", input.id);
-  if (error) return { error: error.message };
+  if (error) return { error: dbError(error, true) };
 
   await supabase.from("workout_sets").delete().eq("workout_id", input.id);
   const rows = input.sets
@@ -263,7 +264,7 @@ export async function moveWorkout(formData: FormData) {
   const date = String(formData.get("date") ?? "");
   if (!isIsoDate(date)) redirect(`/workouts/${id}?error=${encodeURIComponent("Pick a valid date.")}`);
   const { error } = await supabase.from("workouts").update({ workout_date: date }).eq("id", id);
-  if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(dbError(error, true))}`);
   refresh();
   redirect(flash(`/workouts?d=${date}`, "Workout moved."));
 }
@@ -328,7 +329,7 @@ export async function updateWorkout(formData: FormData) {
       generated: false,
     })
     .eq("id", id);
-  if (error) back(error.message);
+  if (error) back(dbError(error, true));
   refresh();
   revalidatePath("/", "layout");
   redirect(flash(`/workouts/${id}`, "Changes saved."));
@@ -368,7 +369,7 @@ export async function rescheduleWorkout(id: string, date: string): Promise<{ err
   const { supabase } = await requireUser();
   if (!isIsoDate(date)) return { error: "Invalid date." };
   const { error } = await supabase.from("workouts").update({ workout_date: date }).eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: dbError(error, true) };
   refresh();
   revalidatePath("/", "layout");
   return { error: null };
@@ -393,7 +394,7 @@ export async function attachActivity(formData: FormData) {
       avg_power: a.avg_power,
     })
     .eq("id", id);
-  if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(dbError(error, true))}`);
   refresh();
   revalidatePath("/", "layout");
   redirect(flash(`/workouts/${id}`, "Garmin activity attached."));
@@ -436,7 +437,7 @@ export async function saveProgress(input: {
       progress: { stepIndex: Math.max(0, Math.round(input.stepIndex)), blockIndex, elapsedMs, updatedAt: new Date().toISOString(), blocks: cleanBlocks(input.blocks) ?? [], ...(cleanOrder(input.order) ? { order: cleanOrder(input.order) } : {}), ...(cleanTotals(input.totals) ? { totals: cleanTotals(input.totals) } : {}) },
     })
     .eq("id", input.id);
-  if (error) return { error: error.message };
+  if (error) return { error: dbError(error, true) };
 
   await supabase.from("workout_sets").delete().eq("workout_id", input.id);
   if (sets.length) {
@@ -487,11 +488,11 @@ export async function adaptMissed(formData: FormData) {
 
   for (const m of moves) {
     const { error } = await supabase.from("workouts").update({ workout_date: m.to }).eq("id", m.id).eq("status", "planned");
-    if (error) redirect(flash("/workouts", `Couldn't move ${m.title}: ${error.message}`));
+    if (error) redirect(flash("/workouts", `Couldn't move ${m.title}. ${dbError(error)}`));
   }
   if (skipIds.length) {
     const { error } = await supabase.from("workouts").update({ status: "skipped" }).in("id", skipIds);
-    if (error) redirect(flash("/workouts", error.message));
+    if (error) redirect(flash("/workouts", dbError(error, true)));
   }
   const plural = (n: number) => `${n} session${n === 1 ? "" : "s"}`;
   const parts: string[] = [];
@@ -523,7 +524,7 @@ export async function setGymSwaps(formData: FormData) {
     const next = on ? swapStructure(w.structure) : revertStructure(w.structure);
     if (JSON.stringify(next) === JSON.stringify(w.structure)) continue;
     const { error } = await supabase.from("workouts").update({ structure: next }).eq("id", w.id);
-    if (error) redirect(flash(`/workouts/${id}`, error.message));
+    if (error) redirect(flash(`/workouts/${id}`, dbError(error, true)));
     changed++;
   }
   revalidatePath("/", "layout");
@@ -541,7 +542,7 @@ export async function logSessionFuel(formData: FormData) {
   };
   const fields = fuelFields(val("fuel_carbs_g"), val("fluid_ml"), val("sodium_mg"));
   const { error } = await supabase.from("workouts").update(fields).eq("id", id);
-  if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(dbError(error, true))}`);
   revalidatePath("/", "layout");
   redirect(flash(`/workouts/${id}`, "Fuel and fluids saved."));
 }

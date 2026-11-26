@@ -9,6 +9,7 @@ import { syncFoodDay } from "@/lib/food-sync";
 import { toTrash, withUndo } from "@/lib/trash";
 import { cleanItems, entriesFor, rowToItem, type MealItem, type SavedKind } from "@/lib/meals";
 import { flash } from "@/lib/flash";
+import { dbError } from "@/lib/db-error";
 
 const MEALS = ["breakfast", "lunch", "dinner", "snack"];
 
@@ -67,7 +68,7 @@ export async function addFoodEntry(input: FoodEntryInput): Promise<{ error: stri
     sugar_g: opt(input.sugar_g),
     fiber_g: opt(input.fiber_g),
   });
-  if (error) return { error: error.message };
+  if (error) return { error: dbError(error, true) };
 
   if (input.saveCustom && ok(input.saveCustom.perServing.calories)) {
     const p = input.saveCustom.perServing;
@@ -118,7 +119,7 @@ export async function addWater(formData: FormData) {
   const { data } = await supabase.from("hydration_days").select("ml").eq("day", day).maybeSingle<{ ml: number }>();
   const next = Math.min(20000, Math.max(0, (data?.ml ?? 0) + delta));
   const { error } = await supabase.from("hydration_days").upsert({ user_id: userId, day, ml: next, updated_at: new Date().toISOString() }, { onConflict: "user_id,day" });
-  if (error) redirect(`/nutrition/log?d=${day}&error=${encodeURIComponent(error.message)}`);
+  if (error) redirect(`/nutrition/log?d=${day}&error=${encodeURIComponent(dbError(error, true))}`);
   revalidatePath("/", "layout");
   redirect(`/nutrition/log?d=${day}`);
 }
@@ -142,7 +143,7 @@ async function insertItems(supabase: Db, userId: string, day: string, meal: stri
     fiber_g: i.fiber_g,
   }));
   const { error } = await supabase.from("food_entries").insert(rows);
-  if (error) return error.message;
+  if (error) return dbError(error, true);
   await syncFoodDay(supabase, userId, day);
   return null;
 }
@@ -197,7 +198,7 @@ export async function copyDay(fromDay: string, toDay: string): Promise<{ error: 
 async function saveFood(supabase: Db, userId: string, kind: SavedKind, name: string, portions: number, items: MealItem[]): Promise<string | null> {
   const { error } = await supabase.from("saved_foods").insert({ user_id: userId, kind, name: name.trim().slice(0, 120), portions, items });
   if (!error) return null;
-  return error.code === "23505" ? "You already have one with that name." : error.message;
+  return error.code === "23505" ? "You already have one with that name." : dbError(error, true);
 }
 
 /** Saves a recipe (ingredients split into portions), a meal or a favourite food. */
@@ -247,7 +248,7 @@ export async function favoriteEntry(formData: FormData) {
 export async function deleteSavedFood(id: string): Promise<{ error: string | null }> {
   const { supabase } = await requireUser();
   const { error } = await supabase.from("saved_foods").delete().eq("id", id);
-  if (error) return { error: error.message };
+  if (error) return { error: dbError(error, true) };
   revalidatePath("/", "layout");
   return { error: null };
 }
@@ -276,8 +277,12 @@ export async function finishDay(formData: FormData) {
   const back = `/nutrition/log?d=${day}`;
   const { count } = await supabase.from("food_entries").select("id", { count: "exact", head: true }).eq("day", day);
   if (!count) redirect(flash(back, "Log at least one food before finishing the day."));
-  const { error } = await supabase.from("day_finishes").upsert({ user_id: userId, day }, { onConflict: "user_id,day" });
-  if (error) redirect(flash(back, `Couldn't finish the day: ${error.message}`));
+  // ignoreDuplicates = ON CONFLICT DO NOTHING. A plain upsert needs UPDATE on the table, which day_finishes (insert/delete only) doesn't grant.
+  const { error } = await supabase.from("day_finishes").upsert({ user_id: userId, day }, { onConflict: "user_id,day", ignoreDuplicates: true });
+  if (error) {
+    console.error("finishDay failed", error.message);
+    redirect(flash(back, "Couldn't finish the day. Please try again."));
+  }
   revalidatePath("/", "layout");
   redirect(flash(back, "Day finished. Nice work."));
 }

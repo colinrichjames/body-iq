@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth";
 import { toTrash, withUndo } from "@/lib/trash";
+import { dbError } from "@/lib/db-error";
 
 const SOURCES = ["inbody", "dexa", "scale", "manual"] as const;
 
@@ -38,7 +39,7 @@ export async function addScan(formData: FormData) {
 
   const { error } = await supabase.from("body_scans").insert(row);
   if (error) {
-    redirect(`/scans?error=${encodeURIComponent(error.message)}`);
+    redirect(`/scans?error=${encodeURIComponent(dbError(error, true))}`);
   }
 
   revalidatePath("/", "layout");
@@ -54,7 +55,7 @@ export async function deleteScan(formData: FormData) {
   const undo = scan ? await toTrash(supabase, userId, "scan", `Scan ${scan.scanned_at.slice(0, 10)}`, { scan }) : null;
   const { error } = await supabase.from("body_scans").delete().eq("id", id);
   if (error) {
-    redirect(`/scans?error=${encodeURIComponent(error.message)}`);
+    redirect(`/scans?error=${encodeURIComponent(dbError(error, true))}`);
   }
 
   revalidatePath("/", "layout");

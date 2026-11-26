@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { flash } from "@/lib/flash";
 import { getToday } from "@/lib/today";
 import { parseCheckin } from "@/lib/checkin";
+import { dbError } from "@/lib/db-error";
 
 const BACK = new Set(["/dashboard", "/recovery"]);
 
@@ -18,7 +19,7 @@ export async function saveCheckin(formData: FormData) {
   if ("error" in parsed) redirect(flash(back, parsed.error));
   const day = await getToday();
   const { error } = await supabase.from("recovery_checkins").upsert({ user_id: userId, day, ...parsed.value, updated_at: new Date().toISOString() }, { onConflict: "user_id,day" });
-  if (error) redirect(flash(back, `Couldn't save your check-in: ${error.message}`));
+  if (error) redirect(flash(back, `Couldn't save your check-in. ${dbError(error)}`));
   revalidatePath("/", "layout");
   redirect(flash(back, "Check-in saved."));
 }
@@ -29,7 +30,7 @@ export async function clearCheckin(formData: FormData) {
   const from = String(formData.get("from") ?? "/recovery");
   const back = BACK.has(from) ? from : "/recovery";
   const { error } = await supabase.from("recovery_checkins").delete().eq("day", await getToday());
-  if (error) redirect(flash(back, `Couldn't remove it: ${error.message}`));
+  if (error) redirect(flash(back, `Couldn't remove it. ${dbError(error)}`));
   revalidatePath("/", "layout");
   redirect(flash(back, "Check-in removed."));
 }
