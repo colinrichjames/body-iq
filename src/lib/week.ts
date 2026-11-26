@@ -2,6 +2,10 @@ import type { Sport, Workout } from "./types";
 
 export type SportTotals = { sport: Sport; plannedMin: number; doneMin: number };
 
+/** The minutes a session counts for in every weekly total and list: what was done if it is done, otherwise what is planned. */
+export const displayMinutes = (w: Pick<Workout, "status" | "planned_duration_min" | "actual_duration_min">): number | null =>
+  w.status === "completed" ? (w.actual_duration_min ?? w.planned_duration_min) : (w.planned_duration_min ?? w.actual_duration_min);
+
 /** Planned vs completed minutes by sport for a set of workouts (scope D-3). Skipped sessions count as planned but not done. */
 export function weekSummary(workouts: Workout[]): { bySport: SportTotals[]; plannedMin: number; doneMin: number; compliance: number | null } {
   const map = new Map<Sport, SportTotals>();

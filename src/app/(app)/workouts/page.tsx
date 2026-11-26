@@ -7,7 +7,7 @@ import { getTimeZone, getToday } from "@/lib/today";
 import { computeLoad } from "@/lib/load";
 import { HARD_DAY_RPE } from "@/lib/intensity";
 import { stackingWarnings } from "@/lib/stacking";
-import { weekSummary } from "@/lib/week";
+import { displayMinutes, weekSummary } from "@/lib/week";
 import { realignPlan } from "../races/actions";
 import { acceptAdaptation, adaptMissed, dismissAdaptation } from "./actions";
 import { adaptationOffer } from "@/lib/missed-offer";
@@ -293,7 +293,7 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
         key={workouts.map((w) => `${w.id}${w.workout_date}${w.status}`).join()}
         days={days}
         today={today}
-        workouts={workouts.map((w) => ({ id: w.id, date: w.workout_date, title: w.title, sport: w.sport, status: w.status, minutes: w.planned_duration_min }))}
+        workouts={workouts.map((w) => ({ id: w.id, date: w.workout_date, title: w.title, sport: w.sport, status: w.status, minutes: displayMinutes(w) }))}
       />
     </main>
   );

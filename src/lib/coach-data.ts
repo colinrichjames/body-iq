@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays } from "./dates";
 import { coachAdvice, mergeWeights, weightTrend, type CoachAdvice, type GoalMode, type Trend, type WeightPoint } from "./coach";
 import { goalOf, GOALS, type GoalType } from "./goals";
+import { loadNutritionDays } from "./nutrition-data";
 import type { Profile } from "./types";
 
 export type CoachState = {
@@ -22,8 +23,9 @@ export async function loadCoach(supabase: SupabaseClient, today: string, profile
   const since = addDays(today, -28);
   const [w, s, n] = await Promise.all([
     supabase.from("weigh_ins").select("day,weight_lb").gte("day", since).order("day"),
-    supabase.from("body_scans").select("scanned_at,weight_lb").gte("scanned_at", since).not("weight_lb", "is", null),
-    supabase.from("nutrition_days").select("day,calories").gte("day", addDays(today, -13)).gt("calories", 0),
+    // Oldest first, so when two scans share a day the one saved last is the one that counts.
+    supabase.from("body_scans").select("scanned_at,weight_lb").gte("scanned_at", since).not("weight_lb", "is", null).order("scanned_at").order("created_at").order("id"),
+    loadNutritionDays(supabase, addDays(today, -13)),
   ]);
   const ins: WeightPoint[] = (w.data ?? []).map((r) => ({ day: r.day as string, weight: Number(r.weight_lb) }));
   const scans: WeightPoint[] = (s.data ?? []).map((r) => ({ day: String(r.scanned_at).slice(0, 10), weight: Number(r.weight_lb) }));
@@ -31,7 +33,7 @@ export async function loadCoach(supabase: SupabaseClient, today: string, profile
   const trend = weightTrend(points, today);
   const goal = goalOf(profile);
   const mode = goal ? GOALS[goal].mode : null;
-  const loggedDays = (n.data ?? []).length;
+  const loggedDays = n.filter((d) => (d.calories ?? 0) > 0).length;
   const advice = coachAdvice({
     mode: mode ?? "maintain",
     rate: profile?.goal_rate_lb_week ?? null,

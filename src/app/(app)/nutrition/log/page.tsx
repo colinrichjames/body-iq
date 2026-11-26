@@ -1,3 +1,4 @@
+import { newestScanFirst } from "@/lib/scan-order";
 import { ConfirmButton } from "@/components/confirm-button";
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
@@ -46,7 +47,7 @@ export default async function FoodLogPage({ searchParams }: { searchParams: Prom
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
     supabase.from("workouts").select("*").eq("workout_date", day).returns<Workout[]>(),
     supabase.from("hydration_days").select("ml").eq("day", day).maybeSingle<{ ml: number }>(),
-    supabase.from("body_scans").select("weight_lb").not("weight_lb", "is", null).order("scanned_at", { ascending: false }).limit(1).maybeSingle<{ weight_lb: number }>(),
+    newestScanFirst(supabase.from("body_scans").select("weight_lb").not("weight_lb", "is", null)).limit(1).maybeSingle<{ weight_lb: number }>(),
     supabase.from("saved_foods").select("id,kind,name,portions,items").order("created_at", { ascending: false }).returns<SavedFood[]>(),
     supabase.from("day_finishes").select("day").gte("day", addDays(today, -400)).returns<{ day: string }[]>(),
   ]);
