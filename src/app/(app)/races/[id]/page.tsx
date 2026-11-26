@@ -39,7 +39,10 @@ export default async function RacePage({
   const phase = phaseInfo(race.race_type, race.race_date, today, planStartFrom(planRows ?? []));
   const { data: latestScan } = await supabase.from("body_scans").select("weight_lb").not("weight_lb", "is", null).order("scanned_at", { ascending: false }).limit(1).maybeSingle<{ weight_lb: number }>();
   const dayCard = raceDayCard(race, today, latestScan?.weight_lb ? Number(latestScan.weight_lb) * 0.45359237 : null);
-  const plan = race.goal_time_sec && hyrox ? hyroxSplits(race.goal_time_sec) : null;
+  // Fastest logged effort per station (and the 1 km run): the goal time is split around these.
+  const bestBy: Record<string, number> = {};
+  for (const b of benchmarks) if (!(b.station in bestBy) || b.time_sec < bestBy[b.station]) bestBy[b.station] = b.time_sec;
+  const plan = race.goal_time_sec && hyrox ? hyroxSplits(race.goal_time_sec, bestBy) : null;
   const targetByStation = new Map(plan?.splits.filter((s) => s.key).map((s) => [s.key!, s.sec]));
   const runTarget = plan ? plan.runSec / 8 : null;
 
@@ -136,35 +139,47 @@ export default async function RacePage({
               <>
                 <table className="mt-3 w-full text-sm tabular-nums">
                   <tbody className="divide-y divide-zinc-900">
-                    {plan.splits.map((s, i) => (
-                      <tr key={i} className={s.kind === "run" ? "text-zinc-400" : ""}>
-                        <td className="py-1.5">{s.label}</td>
-                        <td className="py-1.5 text-right text-zinc-500">
-                          {s.kind === "station" ? STATIONS.find((x) => x.key === s.key)?.work : "1 km"}
-                        </td>
-                        <td className="py-1.5 text-right font-medium">{fmtTime(s.sec)}</td>
-                      </tr>
-                    ))}
+                    {plan.splits.map((s, i) => {
+                      const mine = s.kind === "station" ? bestBy[s.key!] : bestBy.run_1km;
+                      return (
+                        <tr key={i} className={s.kind === "run" ? "text-zinc-400" : ""}>
+                          <td className="py-1.5">{s.label}</td>
+                          <td className="py-1.5 text-right text-zinc-500">
+                            {s.kind === "station" ? STATIONS.find((x) => x.key === s.key)?.work : "1 km"}
+                          </td>
+                          <td className="py-1.5 text-right text-zinc-500" title="Your fastest logged effort">{mine ? `best ${fmtTime(mine)}` : "--"}</td>
+                          <td className="py-1.5 text-right font-medium">{fmtTime(s.sec)}</td>
+                        </tr>
+                      );
+                    })}
                     <tr className="text-zinc-400">
                       <td className="py-1.5">Roxzone (all transitions)</td>
+                      <td />
                       <td />
                       <td className="py-1.5 text-right">{fmtTime(plan.roxzoneSec)}</td>
                     </tr>
                     <tr>
                       <td className="py-1.5 font-medium">Total</td>
                       <td />
+                      <td />
                       <td className="py-1.5 text-right font-medium">{fmtTime(race.goal_time_sec!)}</td>
                     </tr>
                   </tbody>
                 </table>
                 <p className="mt-3 text-xs text-zinc-500">
-                  Starting split: 50% running, 6% Roxzone, the rest weighted across stations. These are rules of thumb. Log benchmark efforts below and adjust.
+                  {Object.keys(bestBy).length
+                    ? "Split around your logged benchmark times: slower stations get more of the goal, stronger ones less. Stations with no time logged use the default share."
+                    : "Starting split: 50% running, 6% Roxzone, the rest weighted across stations. These are rules of thumb."}{" "}
+                  <a href="#benchmarks" className="text-emerald-400">
+                    {Object.keys(bestBy).length ? "Log another effort" : "Log your station times"}
+                  </a>{" "}
+                  to personalise it.
                 </p>
               </>
             )}
           </section>
 
-          <section className={`${card} mt-4`}>
+          <section id="benchmarks" className={`${card} mt-4 scroll-mt-4`}>
             <h2 className="font-medium">Station benchmarks</h2>
             <table className="mt-3 w-full text-sm tabular-nums">
               <thead className="text-left text-xs text-zinc-500">

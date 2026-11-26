@@ -34,16 +34,35 @@ export const ROXZONE_SHARE = 0.06;
 
 export type Split = { label: string; kind: "run" | "station" | "roxzone"; sec: number; key?: string };
 
-/** Splits a goal time into 8 km runs, 8 stations and Roxzone transition time. */
-export function hyroxSplits(goalSec: number): { splits: Split[]; runSec: number; roxzoneSec: number; stationsSec: number } {
-  const runSec = goalSec * RUN_SHARE;
-  const roxzoneSec = goalSec * ROXZONE_SHARE;
-  const stationsSec = goalSec - runSec - roxzoneSec;
+/**
+ * Splits a goal time into 8 km runs, 8 stations and Roxzone transition time.
+ *
+ * With no benchmarks the split is the rule of thumb above. With the user's best times (seconds, keyed by station key and
+ * "run_1km"), the station budget is shared out in proportion to how long each station takes them, so a slow station
+ * gets more of the goal and a strong one less. A station with no benchmark counts at its default share. When the run
+ * and all eight stations have a benchmark, the run/station balance follows the benchmarks too (kept between 35% and 60%
+ * running). The total always equals the goal.
+ */
+export function hyroxSplits(goalSec: number, best: Record<string, number> = {}): { splits: Split[]; runSec: number; roxzoneSec: number; stationsSec: number } {
   const weightSum = STATIONS.reduce((a, s) => a + s.weight, 0);
+  const roxzoneSec = goalSec * ROXZONE_SHARE;
+  const allBenched = best.run_1km > 0 && STATIONS.every((s) => best[s.key] > 0);
+  let runShare = RUN_SHARE;
+  if (allBenched) {
+    const runs = 8 * best.run_1km;
+    const stations = STATIONS.reduce((a, s) => a + best[s.key], 0);
+    runShare = Math.min(0.6, Math.max(0.35, (runs / (runs + stations)) * (1 - ROXZONE_SHARE)));
+  }
+  const runSec = goalSec * runShare;
+  const stationsSec = goalSec - runSec - roxzoneSec;
+  // Reference time per station: the user's best where logged, otherwise the default share, on the same scale.
+  const defaults = STATIONS.map((s) => (stationsSec * s.weight) / weightSum);
+  const refs = STATIONS.map((s, i) => (best[s.key] > 0 ? best[s.key] : defaults[i]));
+  const refSum = refs.reduce((a, r) => a + r, 0);
   const splits: Split[] = [];
   STATIONS.forEach((s, i) => {
     splits.push({ label: `Run ${i + 1}`, kind: "run", sec: runSec / 8 });
-    splits.push({ label: s.label, kind: "station", sec: (stationsSec * s.weight) / weightSum, key: s.key });
+    splits.push({ label: s.label, kind: "station", sec: (stationsSec * refs[i]) / refSum, key: s.key });
   });
   return { splits, runSec, roxzoneSec, stationsSec };
 }
