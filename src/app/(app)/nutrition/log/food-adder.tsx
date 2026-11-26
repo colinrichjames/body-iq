@@ -1,5 +1,6 @@
 "use client";
 
+import { findCommon, type CommonFood } from "@/lib/common-foods";
 import { useToast } from "@/components/toast";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -42,7 +43,7 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
   const [scanning, setScanning] = useState(false);
   const [picked, setPicked] = useState<Food | null>(null);
   const [servings, setServings] = useState("1");
-  const [manual, setManual] = useState<{ barcode: string | null; name?: string } | null>(null);
+  const [manual, setManual] = useState<{ barcode: string | null; name?: string; prefill?: CommonFood } | null>(null);
   const [emptyFor, setEmptyFor] = useState<string | null>(null);
   const latest = useRef(0);
   const [saving, setSaving] = useState(false);
@@ -285,6 +286,21 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
         <div className="mt-3 rounded-xl border border-zinc-800 px-3 py-3 text-sm">
           <p className="text-zinc-300">No foods found for &ldquo;{emptyFor}&rdquo;.</p>
           <p className="mt-1 text-zinc-500">Try another word or scan the barcode.</p>
+          {findCommon(emptyFor).length > 0 && (
+            <div className="mt-2">
+              <p className="text-xs text-zinc-500">Common foods (typical values, edit before saving):</p>
+              <ul className="mt-1 space-y-1">
+                {findCommon(emptyFor).map((f) => (
+                  <li key={f.name}>
+                    <button type="button" onClick={() => setManual({ barcode: null, name: f.name, prefill: f })} className="flex w-full justify-between rounded-lg border border-zinc-800 px-3 py-2 text-left hover:border-emerald-700">
+                      <span>{f.name} <span className="text-xs text-zinc-500">· {f.serving}</span></span>
+                      <span className="text-xs tabular-nums text-zinc-400">{f.calories} cal</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <button type="button" onClick={() => setManual({ barcode: null, name: emptyFor })} className="mt-2 text-emerald-400 underline">
             Add &ldquo;{emptyFor}&rdquo; by hand
           </button>
@@ -417,6 +433,7 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
 
       {manual && (
         <form
+          key={manual.prefill?.name ?? "blank"}
           onSubmit={(e) => {
             e.preventDefault();
             void submitManual(new FormData(e.currentTarget));
@@ -426,13 +443,13 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
           {manual.barcode && <p className="text-xs text-zinc-500">Barcode {manual.barcode}</p>}
           <Field label="Food name"><input name="name" required defaultValue={manual.name ?? ""} className={field} /></Field>
           <Field label="Brand (optional)"><input name="brand" className={field} /></Field>
-          <Field label="Serving size"><input name="serving_label" placeholder="e.g. 1 bar or 40 g" className={field} /></Field>
+          <Field label="Serving size"><input name="serving_label" defaultValue={manual.prefill?.serving ?? ""} placeholder="e.g. 1 bar or 40 g" className={field} /></Field>
           <p className="text-xs text-zinc-500">Nutrition per one serving:</p>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Calories"><input name="calories" type="number" inputMode="decimal" step="any" min="0" required className={field} /></Field>
-            <Field label="Protein (g)"><input name="protein_g" type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
-            <Field label="Carbs (g)"><input name="carbs_g" type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
-            <Field label="Fat (g)"><input name="fat_g" type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
+            <Field label="Calories"><input name="calories" defaultValue={manual.prefill?.calories} type="number" inputMode="decimal" step="any" min="0" required className={field} /></Field>
+            <Field label="Protein (g)"><input name="protein_g" defaultValue={manual.prefill?.protein_g} type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
+            <Field label="Carbs (g)"><input name="carbs_g" defaultValue={manual.prefill?.carbs_g} type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
+            <Field label="Fat (g)"><input name="fat_g" defaultValue={manual.prefill?.fat_g} type="number" inputMode="decimal" step="any" min="0" className={field} /></Field>
           </div>
           <input name="servings" type="number" inputMode="decimal" step="0.25" min="0.25" defaultValue="1" className={field} aria-label="Servings eaten" />
           <label className="flex items-center gap-2 text-sm text-zinc-300">
