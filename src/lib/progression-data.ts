@@ -11,6 +11,12 @@ export function groupHistory(rows: Row[]): Record<string, HistSession[]> {
   const out: Record<string, Map<string, HistSession>> = {};
   for (const r of rows) {
     const w = Array.isArray(r.workouts) ? r.workouts[0] : r.workouts;
+    if (w && r.skipped) {
+      const sk = (out[r.exercise] ??= new Map());
+      const cur = sk.get(w.workout_date) ?? { date: w.workout_date, sets: [] };
+      cur.skipped = (cur.skipped ?? 0) + 1;
+      sk.set(w.workout_date, cur);
+    }
     const weight = r.weight_lb === null ? 0 : Number(r.weight_lb);
     if (!w || r.skipped || !(weight > 0) || r.reps === null || r.reps < 1) continue;
     const byDate = (out[r.exercise] ??= new Map());

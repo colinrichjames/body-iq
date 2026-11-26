@@ -24,7 +24,9 @@ export async function sessionInsights(supabase: SupabaseClient, workout: Pick<Wo
   const prior = (data ?? []).map((r) => ({ exercise: r.exercise as string, weight_lb: r.weight_lb === null ? null : Number(r.weight_lb), reps: r.reps as number | null, skipped: r.skipped as boolean }));
   const targets: Record<string, number | undefined> = {};
   for (const e of workout.structure?.exercises ?? []) targets[e.name] = e.reps;
-  const fallback = nextWeights(logs, targets);
+  const planned: Record<string, number | undefined> = {};
+  for (const e of workout.structure?.exercises ?? []) planned[e.name] = e.sets;
+  const fallback = nextWeights(logs, targets, planned);
   return { prs: detectPRs(prior, logs), next: await historyNext(supabase, workout, logs, targets, fallback) };
 }
 
@@ -38,6 +40,7 @@ async function historyNext(supabase: SupabaseClient, workout: Pick<Workout, "id"
   const hist = await loadHistory(supabase, workout.workout_date, { names, excludeId: workout.id });
   const now = groupHistory(logs.map((l) => ({ exercise: l.exercise, weight_lb: l.weight_lb, reps: l.reps, rpe: l.rpe ?? null, skipped: l.skipped ?? false, workouts: { workout_date: workout.workout_date } })));
   return fallback.map((f) => {
+    if (f.incomplete) return f;
     const sessions: HistSession[] = [...(now[f.exercise] ?? []), ...(hist[f.exercise] ?? []).filter((s) => s.date !== workout.workout_date)];
     const target = targets[f.exercise];
     const sug = target ? suggestNext(f.exercise, sessions, target) : null;
