@@ -20,6 +20,7 @@ import { sessionInsights, type SessionInsights } from "@/lib/session-insights";
 import { prText } from "@/lib/lifting";
 import { GYM_READY, isStale, isSwapped, stationsIn } from "@/lib/hyrox-swaps";
 import { fmtDist, fmtPace, sessionPaceProblem } from "@/lib/distance";
+import { canStartOrFinish, headerFacts } from "@/lib/workout-header";
 import { buildSteps } from "@/lib/steps";
 import { restSummary } from "@/lib/context";
 import type { WorkoutSet } from "@/lib/types";
@@ -95,8 +96,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       </Link>
       <p className="mt-3 text-xs uppercase tracking-wider text-zinc-500">
         {formatDay(w.workout_date, { weekday: true, year: true })} &middot; {w.sport}
-        {w.planned_duration_min ? ` · ${w.planned_duration_min} min` : ""}
-        {w.planned_distance_km ? ` · ${fmtDist(w.planned_distance_km, unit)}` : ""}
+        {headerFacts(w, unit).map((f) => ` · ${f}`).join("")}
       </p>
       <h1 className="mt-1 text-2xl font-semibold tracking-tight">{w.title}</h1>
       <div className="mt-2 flex items-center gap-2">
@@ -378,19 +378,19 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       )}
 
       <div className="mt-6 space-y-3">
-        {w.status !== "completed" && w.sport === "run" && w.planned_duration_min && w.planned_distance_km ? (
+        {canStartOrFinish(w.status) && w.sport === "run" && w.planned_duration_min && w.planned_distance_km ? (
           <p className={`text-sm ${sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km) ? "text-red-400" : "text-zinc-400"}`}>
             Pace {fmtPace(w.planned_duration_min, w.planned_distance_km, w.distance_unit)}
             {sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km) ? `. ${sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km)} Edit it before marking done.` : ""}
           </p>
         ) : null}
-        {w.status !== "completed" && (
+        {canStartOrFinish(w.status) && (
           <Link href={`/workouts/${w.id}/start`} className={`${btnPrimary} block text-center`}>
             {inProgress ? "Resume" : hasGuide ? "Start workout" : "Start timer"}
           </Link>
         )}
         <div className="flex flex-wrap gap-2">
-          {w.status !== "completed" && (
+          {canStartOrFinish(w.status) && (
             <form action={setStatus}>
               <input type="hidden" name="id" value={w.id} />
               <input type="hidden" name="status" value="completed" />
@@ -399,7 +399,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
               </button>
             </form>
           )}
-          {w.status !== "skipped" && (
+          {canStartOrFinish(w.status) && (
             <form action={setStatus}>
               <input type="hidden" name="id" value={w.id} />
               <input type="hidden" name="status" value="skipped" />
