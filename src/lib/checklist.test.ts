@@ -17,3 +17,10 @@ describe("first-run checklist", () => {
     expect(checklistProgress(buildChecklist({ ...empty, races: 1, scans: 1 })).done).toBe(2);
   });
 });
+
+describe("checklistProgress completion", () => {
+  it("is complete once every required step is done, even with optional Garmin open", () => {
+    const items = buildChecklist({ races: 1, hasTargets: true, scans: 1, workouts: 1, foodEntries: 1, garminConnected: false });
+    expect(checklistProgress(items)).toEqual({ done: 5, total: 5, complete: true });
+  });
+});

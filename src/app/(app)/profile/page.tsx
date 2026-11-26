@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ConfirmButton } from "@/components/confirm-button";
 import { FirstRunChecklist } from "@/components/first-run-checklist";
 import { requireUser } from "@/lib/auth";
-import { buildChecklist } from "@/lib/checklist";
+import { buildChecklist, checklistProgress } from "@/lib/checklist";
 import { dismissChecklist } from "../dashboard/guest-actions";
 import type { BodyScan, Profile } from "@/lib/types";
 import { signOut } from "./actions";
@@ -67,7 +67,7 @@ export default async function ProfilePage() {
         </div>
       </section>
 
-      {!profile?.onboarding_dismissed_at && <FirstRunChecklist items={checklist} dismiss={dismissChecklist} />}
+      {!profile?.onboarding_dismissed_at && !checklistProgress(checklist).complete && <FirstRunChecklist items={checklist} dismiss={dismissChecklist} />}
 
       <ul className="mt-4 divide-y divide-zinc-800 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40">
         <li><Row href="/scans" title="Body" detail={scanSummary} /></li>
