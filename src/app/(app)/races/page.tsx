@@ -115,7 +115,7 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
                 <form action={regeneratePlan}>
                   <input type="hidden" name="id" value={r.id} />
                   {n > 0 ? (
-                    <ConfirmButton message="Rebuild the plan? Planned sessions from today on are replaced with a fresh plan. Completed sessions and ones you edited stay." className={`${btnGhost} px-3 py-2 text-sm`}>
+                    <ConfirmButton confirmLabel="Rebuild" message="Rebuild the plan? Planned sessions from today on are replaced with a fresh plan. Completed sessions and ones you edited stay." className={`${btnGhost} px-3 py-2 text-sm`}>
                       Rebuild plan
                     </ConfirmButton>
                   ) : (

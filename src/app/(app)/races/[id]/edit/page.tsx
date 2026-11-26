@@ -8,7 +8,8 @@ import type { Race } from "@/lib/types";
 import { btnGhost, btnPrimary, card, field } from "@/components/ui";
 import { DraftForm } from "@/components/draft-form";
 import { Field } from "@/components/field";
-import { updateRace } from "../../actions";
+import { ConfirmButton } from "@/components/confirm-button";
+import { deleteRace, updateRace } from "../../actions";
 
 export default async function EditRacePage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
@@ -79,6 +80,12 @@ export default async function EditRacePage({ params, searchParams }: { params: P
           Cancel
         </Link>
       </DraftForm>
+      <form action={deleteRace} className="mt-6 text-center">
+        <input type="hidden" name="id" value={id} />
+        <ConfirmButton message={`Delete ${race.name}? Its unfinished planned sessions are deleted too; completed workouts stay. You can undo right after.`} className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
+          Delete race
+        </ConfirmButton>
+      </form>
     </main>
   );
 }
