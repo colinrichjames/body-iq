@@ -5,7 +5,7 @@ import { computeInsights, SCORE_NAME } from "@/lib/insights";
 import { raceLabel } from "@/lib/plan";
 import { phaseInfo, planStartFrom } from "@/lib/race-phase";
 import { raceDayCard } from "@/lib/race-day";
-import { getTimeZone, getToday } from "@/lib/today";
+import { dateInTimeZone, getTimeZone, getToday } from "@/lib/today";
 import { dueReminders, hourIn } from "@/lib/reminders";
 import { computeReadiness, mergeCheckins } from "@/lib/readiness";
 import { loadDeload } from "@/lib/progression-data";
@@ -17,6 +17,8 @@ import { CheckinCard } from "@/components/checkin-card";
 import { fuelForDay } from "@/lib/fuel";
 import { classify } from "@/lib/intensity";
 import { swapHardSession } from "../workouts/actions";
+import type { Act } from "@/lib/garmin-summary";
+import { GarminOverview } from "@/components/garmin-overview";
 import { GarminSyncCard } from "@/components/garmin-sync-card";
 import { loadGarminStatus } from "@/lib/garmin-status";
 import { saveGuestAccount } from "./guest-actions";
@@ -59,6 +61,16 @@ export default async function DashboardPage() {
   const { data: finishedRows } = await supabase.from("day_finishes").select("day").gte("day", addDays(today, -400)).returns<{ day: string }[]>();
   const streak = loggingStreak((finishedRows ?? []).map((r) => r.day), today);
   const garmin = await loadGarminStatus(supabase);
+  const tz = await getTimeZone();
+  const { data: actRows } = await supabase
+    .from("activities")
+    .select("id,sport,title,started_at,duration_sec,distance_m,avg_hr")
+    .gte("started_at", `${addDays(today, -8)}T00:00:00Z`)
+    .order("started_at", { ascending: false })
+    .returns<Act[]>();
+  // Seven local days ending today.
+  const weekStart = addDays(today, -6);
+  const weekActs = (actRows ?? []).filter((a) => dateInTimeZone(tz, new Date(a.started_at)) >= weekStart);
   const todayFuel = (nutritionRes.data ?? []).find((d) => d.day === today) ?? null;
   // The Today card already lists planned sessions, so only the nudges it doesn't cover are shown here.
   const reminders = dueReminders({
@@ -93,7 +105,7 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      <GarminSyncCard connected={garmin.connected} last={garmin.last} tz={await getTimeZone()} from="/dashboard" />
+      <GarminSyncCard connected={garmin.connected} last={garmin.last} tz={tz} from="/dashboard" />
 
       {isGuest && (
         <section className="mt-4 rounded-2xl border border-amber-700/50 bg-amber-950/20 p-4">
@@ -165,6 +177,8 @@ export default async function DashboardPage() {
           </ul>
         )}
       </section>
+
+      {garmin.connected && <GarminOverview activities={weekActs} health={healthRes.data ?? []} today={today} tz={tz} units={profileRes.data?.unit_system ?? "imperial"} />}
 
       <section className="mt-4 rounded-2xl border border-zinc-800 p-5">
         <div className="flex items-baseline justify-between">
