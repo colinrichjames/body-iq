@@ -10,7 +10,7 @@ import { loadStep, suggestNext } from "@/lib/progression";
 import { adaptSession, adaptWeight, adaptedTotals } from "@/lib/adapt";
 import { computeLoad } from "@/lib/load";
 import { computeReadiness } from "@/lib/readiness";
-import { addDays, startOfWeek } from "@/lib/dates";
+import { addDays, startOfSundayWeek } from "@/lib/dates";
 import { mergeCheckins } from "@/lib/readiness";
 
 export default async function StartWorkoutPage({ params }: { params: Promise<{ id: string }> }) {
@@ -59,7 +59,7 @@ export default async function StartWorkoutPage({ params }: { params: Promise<{ i
     const check = await loadDeload(supabase, today, health);
     deload = check.level === "deload";
     const { data: recent } = await supabase.from("workouts").select("*").gte("workout_date", addDays(today, -90)).lte("workout_date", today).returns<Workout[]>();
-    const weekStart = startOfWeek(today);
+    const weekStart = startOfSundayWeek(today);
     const load = computeLoad(recent ?? [], today, weekStart, (recent ?? []).filter((x) => x.workout_date >= weekStart));
     adaptation = adaptSession(w, { readiness: computeReadiness(health), load, deload: check.level });
     const hist = await loadHistory(supabase, today, { names, excludeId: id });

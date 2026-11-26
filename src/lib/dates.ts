@@ -28,6 +28,11 @@ export function startOfWeek(iso: string): string {
   return addDays(iso, -weekdayIndex(iso));
 }
 
+/** Sunday-first week start, used for what the calendar and week views display. Plans and adherence stay Monday-based. */
+export function startOfSundayWeek(iso: string): string {
+  return addDays(iso, -((weekdayIndex(iso) + 1) % 7));
+}
+
 export function isIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [y, m, d] = parts(value);

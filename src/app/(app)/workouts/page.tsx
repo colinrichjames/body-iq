@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { addDays, formatDay, isIsoDate, startOfWeek } from "@/lib/dates";
+import { addDays, formatDay, isIsoDate, startOfSundayWeek } from "@/lib/dates";
 import { getToday } from "@/lib/today";
 import { computeLoad } from "@/lib/load";
 import { HARD_DAY_RPE } from "@/lib/intensity";
@@ -28,7 +28,7 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
   const { supabase } = await requireUser();
   const today = await getToday();
   const anchor = d && isIsoDate(d) ? d : today;
-  const weekStart = startOfWeek(anchor);
+  const weekStart = startOfSundayWeek(anchor);
   const weekEnd = addDays(weekStart, 6);
 
   const from = [addDays(weekStart, -1), addDays(today, -89)].sort()[0];
