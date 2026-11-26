@@ -40,7 +40,7 @@ export function FirstRunChecklist({ items, dismiss }: { items: ChecklistItem[]; 
       </ul>
       <form action={dismiss} className="mt-2 text-right">
         <SubmitButton pendingText="Hiding..." className="text-xs text-zinc-500 underline">
-          {p.complete ? "Done, hide this" : "Hide this"}
+          Hide this
         </SubmitButton>
       </form>
     </section>

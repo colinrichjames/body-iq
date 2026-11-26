@@ -15,10 +15,10 @@ describe("FirstRunChecklist", () => {
     expect(screen.getByText(/builds your training plan backwards/i)).toBeTruthy();
     expect(screen.getByText("(optional)")).toBeTruthy();
   });
-  it("hides hints for finished steps and offers Done when complete", () => {
+  it("hides hints for finished steps", () => {
     render(<FirstRunChecklist items={buildChecklist({ races: 1, hasTargets: true, scans: 1, workouts: 1, foodEntries: 1, garminConnected: false })} dismiss={async () => {}} />);
     expect(screen.getByText("5 of 5 done")).toBeTruthy();
     expect(screen.queryByText(/builds your training plan backwards/i)).toBeNull();
-    expect(screen.getByRole("button", { name: /done, hide this/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /hide this/i })).toBeTruthy();
   });
 });
