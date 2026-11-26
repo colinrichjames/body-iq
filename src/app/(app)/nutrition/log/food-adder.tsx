@@ -363,7 +363,7 @@ export function FoodAdder({ day, recents, frequent, favourites, meals }: { day: 
       )}
 
       {selectedList.length > 0 && !picked && !manual && (
-        <div className="sticky bottom-20 z-10 mt-4 flex gap-2 rounded-xl border border-emerald-700 bg-zinc-950 p-2">
+        <div className="sticky bottom-28 z-10 mt-4 flex gap-2 rounded-xl border border-emerald-700 bg-zinc-950 p-2">
           <button type="button" onClick={() => setSelected({})} className={`${btnGhost} px-3 py-2 text-sm`}>
             Clear
           </button>
