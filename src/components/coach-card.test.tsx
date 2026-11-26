@@ -2,16 +2,16 @@
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/(app)/nutrition/coach-actions", () => ({ applyCoach: vi.fn(), keepTargets: vi.fn(), logWeighIn: vi.fn(), saveGoal: vi.fn() }));
+vi.mock("@/app/(app)/nutrition/coach-actions", () => ({ applyCoach: vi.fn(), keepTargets: vi.fn(), logWeighIn: vi.fn() }));
 import { CoachCard } from "./coach-card";
 import type { CoachState } from "@/lib/coach-data";
 
 const need: CoachState["advice"] = { status: "need_data", headline: "Log your weight to start", detail: "d", delta: 0, newCalories: null, newRestCalories: null, carbsDelta: 0 };
-const state = (over: Partial<CoachState>): CoachState => ({ mode: "lose", rate: 1, trend: null, advice: need, latest: null, loggedDays: 0, lastChecked: null, recent: [], ...over });
+const state = (over: Partial<CoachState>): CoachState => ({ mode: "lose", goal: "lose_weight", rate: 1, trend: null, advice: need, latest: null, loggedDays: 0, lastChecked: null, recent: [], ...over });
 
 describe("CoachCard", () => {
   it("asks for a goal when none is set", () => {
-    const { container } = render(<CoachCard coach={state({ mode: null })} today="2026-11-25" from="/nutrition" />);
+    const { container } = render(<CoachCard coach={state({ mode: null, goal: null })} today="2026-11-25" from="/nutrition" />);
     expect(container.textContent).toContain("Pick a goal to start");
   });
   it("offers Apply and Keep mine when a change is due", () => {
@@ -25,5 +25,14 @@ describe("CoachCard", () => {
     const advice = { status: "adjust" as const, headline: "h", detail: "x", delta: -250, newCalories: 2150, newRestCalories: null, carbsDelta: -62 };
     const { container } = render(<CoachCard coach={state({ advice, lastChecked: "2026-11-23" })} today="2026-11-25" from="/nutrition" />);
     expect(container.textContent).not.toContain("Keep mine");
+  });
+});
+
+describe("CoachCard goal link", () => {
+  it("points to Profile for the goal instead of holding the goal form", () => {
+    const { container } = render(<CoachCard coach={state({})} today="2026-11-25" from="/nutrition" />);
+    expect(container.textContent).toContain("Goal: lose weight");
+    expect(container.querySelector('a[href="/profile#goal"]')).not.toBeNull();
+    expect(container.querySelector('input[name="goal_type"]')).toBeNull();
   });
 });

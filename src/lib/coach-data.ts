@@ -1,10 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { addDays } from "./dates";
 import { coachAdvice, mergeWeights, weightTrend, type CoachAdvice, type GoalMode, type Trend, type WeightPoint } from "./coach";
+import { goalOf, GOALS, type GoalType } from "./goals";
 import type { Profile } from "./types";
 
 export type CoachState = {
   mode: GoalMode | null;
+  goal: GoalType | null;
   rate: number | null;
   trend: Trend | null;
   advice: CoachAdvice;
@@ -27,7 +29,8 @@ export async function loadCoach(supabase: SupabaseClient, today: string, profile
   const scans: WeightPoint[] = (s.data ?? []).map((r) => ({ day: String(r.scanned_at).slice(0, 10), weight: Number(r.weight_lb) }));
   const points = mergeWeights(ins, scans);
   const trend = weightTrend(points, today);
-  const mode = profile?.goal_mode ?? null;
+  const goal = goalOf(profile);
+  const mode = goal ? GOALS[goal].mode : null;
   const loggedDays = (n.data ?? []).length;
   const advice = coachAdvice({
     mode: mode ?? "maintain",
@@ -37,5 +40,5 @@ export async function loadCoach(supabase: SupabaseClient, today: string, profile
     restCalories: profile?.rest_calorie_target ?? null,
     loggedDays,
   });
-  return { mode, rate: profile?.goal_rate_lb_week ?? null, trend, advice, latest: points.at(-1) ?? null, loggedDays, lastChecked: profile?.coach_checked_at ?? null, recent: [...points].reverse().slice(0, 5) };
+  return { mode, goal, rate: profile?.goal_rate_lb_week ?? null, trend, advice, latest: points.at(-1) ?? null, loggedDays, lastChecked: profile?.coach_checked_at ?? null, recent: [...points].reverse().slice(0, 5) };
 }

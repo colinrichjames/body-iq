@@ -151,6 +151,7 @@ export type Profile = {
   rest_fat_g: number | null;
   onboarding_dismissed_at: string | null;
   goal_mode: "lose" | "maintain" | "gain" | null;
+  goal_type: "lose_weight" | "lose_fat" | "build_muscle" | "maintain" | "performance" | "gain_weight" | null;
   goal_rate_lb_week: number | null;
   coach_checked_at: string | null;
 };

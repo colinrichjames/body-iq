@@ -4,6 +4,9 @@ import { FirstRunChecklist } from "@/components/first-run-checklist";
 import { requireUser } from "@/lib/auth";
 import { buildChecklist, checklistProgress } from "@/lib/checklist";
 import { dismissChecklist } from "../dashboard/guest-actions";
+import { GoalCard } from "@/components/goal-card";
+import { loadCoach } from "@/lib/coach-data";
+import { getToday } from "@/lib/today";
 import type { BodyScan, Profile } from "@/lib/types";
 import { signOut } from "./actions";
 
@@ -31,6 +34,7 @@ export default async function ProfilePage() {
     supabase.from("garmin_connections").select("user_id", { count: "exact", head: true }),
   ]);
   const profile = profileRes.data ?? null;
+  const coach = await loadCoach(supabase, await getToday(), profile);
   const metric = profile?.unit_system === "metric";
   const scan = scanRes.data?.[0] ?? null;
   const checklist = buildChecklist({
@@ -68,6 +72,8 @@ export default async function ProfilePage() {
       </section>
 
       {!profile?.onboarding_dismissed_at && !checklistProgress(checklist).complete && <FirstRunChecklist items={checklist} dismiss={dismissChecklist} />}
+
+      <GoalCard goal={coach.goal} rate={coach.rate} weightLb={coach.latest?.weight ?? scan?.weight_lb ?? null} proteinTarget={profile?.protein_target_g ?? null} />
 
       <ul className="mt-4 divide-y divide-zinc-800 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40">
         <li><Row href="/scans" title="Body" detail={scanSummary} /></li>
