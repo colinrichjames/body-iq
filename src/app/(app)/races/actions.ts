@@ -7,7 +7,8 @@ import { flash } from "@/lib/flash";
 import { toTrash, withUndo } from "@/lib/trash";
 import { addDays, isIsoDate } from "@/lib/dates";
 import { parseDuration } from "@/lib/hyrox";
-import { generatePlan, RACE_TYPES } from "@/lib/plan";
+import { generatePlan, RACE_TYPES, type OtherRace } from "@/lib/plan";
+import { prefsFromForm, sanitizePrefs } from "@/lib/plan-prefs";
 import { planSummary, type PlanResult } from "@/lib/plan-summary";
 import { affectsPlan, raceChanges, type RaceFields } from "@/lib/race-edit";
 import { getToday } from "@/lib/today";
@@ -41,6 +42,12 @@ async function applyPlan(race: Race): Promise<PlanResult> {
     .lte("workout_date", race.race_date);
   const taken = new Set((existing ?? []).map((w) => w.workout_date as string));
 
+  const [{ data: prof }, { data: others }] = await Promise.all([
+    supabase.from("profiles").select("training_prefs").eq("id", userId).maybeSingle<{ training_prefs: unknown }>(),
+    supabase.from("races").select("name,race_date,priority").neq("id", race.id).gte("race_date", today).returns<{ name: string; race_date: string; priority: "A" | "B" | "C" }[]>(),
+  ]);
+  const otherRaces: OtherRace[] = (others ?? []).map((o) => ({ name: o.name, date: o.race_date, priority: o.priority }));
+
   let planned;
   try {
     planned = generatePlan({
@@ -49,6 +56,8 @@ async function applyPlan(race: Race): Promise<PlanResult> {
       raceDate: race.race_date,
       startDate: today,
       priority: race.priority,
+      prefs: sanitizePrefs(prof?.training_prefs),
+      others: otherRaces,
     });
   } catch (e) {
     fail(e instanceof Error ? e.message : "Could not generate a plan.");
@@ -106,7 +115,7 @@ export async function addRace(formData: FormData) {
   const result = formData.get("generate") === "on" ? await applyPlan(data) : null;
 
   revalidatePath("/", "layout");
-  redirect(flash("/races", result ? planSummary(result, "built") : "Race added. No plan built yet."));
+  redirect(flash(result ? `/races/${data.id}/plan` : "/races", result ? `${planSummary(result, "built")} Review it below and set your training days.` : "Race added. No plan built yet."));
 }
 
 /**
@@ -158,7 +167,7 @@ export async function regeneratePlan(formData: FormData) {
   if (!data) fail("Race not found.");
   const result = await applyPlan(data);
   revalidatePath("/", "layout");
-  redirect(flash("/races", planSummary(result, "rebuilt")));
+  redirect(flash(`/races/${id}/plan`, planSummary(result, "rebuilt")));
 }
 
 export async function deleteRace(formData: FormData) {
@@ -271,4 +280,20 @@ export async function realignPlan(formData: FormData) {
   }
   revalidatePath("/", "layout");
   redirect(`/workouts?notice=${encodeURIComponent(message)}`);
+}
+
+/** Saves the user's training days and long-session day, then rebuilds this race's plan around them. */
+export async function savePlanPrefs(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const raceId = String(formData.get("race_id") ?? "");
+  const back = `/races/${raceId}/plan`;
+  const prefs = prefsFromForm(formData);
+  if (!prefs) redirect(flash(back, "Pick at least two training days."));
+  const { error } = await supabase.from("profiles").upsert({ id: userId, training_prefs: prefs }, { onConflict: "id" });
+  if (error) redirect(flash(back, `Couldn't save your days: ${error.message}`));
+  const { data: race } = await supabase.from("races").select("*").eq("id", raceId).maybeSingle<Race>();
+  if (!race) redirect(flash("/races", "Saved your training days."));
+  const result = await applyPlan(race);
+  revalidatePath("/", "layout");
+  redirect(flash(back, `Saved your days. ${planSummary(result, "rebuilt")}`));
 }

@@ -77,6 +77,9 @@ export default async function RacePage({
           <p className="mt-0.5 text-sm text-zinc-400">{phase.blurb}</p>
         </div>
       )}
+      <Link href={`/races/${race.id}/plan`} className="mr-2 mt-3 inline-block rounded-xl border border-emerald-500/60 px-3 py-1.5 text-sm text-emerald-300 active:bg-emerald-500/10">
+        Training plan
+      </Link>
       <Link href={`/races/${race.id}/edit`} className="mt-3 inline-block rounded-xl border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 active:bg-zinc-800">
         Edit race
       </Link>

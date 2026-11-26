@@ -42,7 +42,17 @@ const PEAKS: Record<
   hyrox_doubles: { longRun: 60, longBike: 60, brickRun: 0, swim: 0, taperWeeks: 2 },
 };
 
-export type WeekPlan = { weekStart: string; phase: Phase; factor: number; isRaceWeek: boolean };
+export type WeekPlan = { weekStart: string; phase: Phase; factor: number; isRaceWeek: boolean; /** Why this week differs, e.g. another race or the recovery after it. */ note?: string };
+
+/** Another upcoming race this plan has to work around. */
+export type OtherRace = { name: string; date: string; priority: "A" | "B" | "C" };
+
+/** Share of normal volume in the week of another race and in the week after it, by that race's priority. */
+const OTHER_RACE_WEEK: Record<"A" | "B" | "C", { during: number; after: number }> = {
+  A: { during: 0.5, after: 0.6 },
+  B: { during: 0.7, after: 0.8 },
+  C: { during: 0.85, after: 0.9 },
+};
 
 const TAPER_FACTORS: Record<number, number[]> = {
   1: [0.4],
@@ -57,7 +67,7 @@ function taperFactors(weeks: number): number[] {
 }
 
 /** Calendar weeks (Mon-Sun) from the start date through race week, with phase and volume factor. */
-export function planWeeks(raceType: RaceType, startDate: string, raceDate: string, taperOverride?: number): WeekPlan[] {
+export function planWeeks(raceType: RaceType, startDate: string, raceDate: string, taperOverride?: number, others: OtherRace[] = []): WeekPlan[] {
   if (diffDays(startDate, raceDate) < 0) throw new Error("Race date must be today or later.");
 
   const first = startOfWeek(startDate);
@@ -85,6 +95,22 @@ export function planWeeks(raceType: RaceType, startDate: string, raceDate: strin
       factor: tf[j],
       isRaceWeek: j === taperTotal - 1,
     });
+  }
+  // Build around the user's other races: a lighter week for the race itself, then recovery after it.
+  for (const o of others) {
+    if (o.date === raceDate) continue;
+    for (const w of weeks) {
+      if (w.isRaceWeek) continue;
+      const end = addDays(w.weekStart, 6);
+      const k = OTHER_RACE_WEEK[o.priority];
+      if (o.date >= w.weekStart && o.date <= end) {
+        w.factor *= k.during;
+        w.note = `Race this week: ${o.name} (${o.priority})`;
+      } else if (o.date >= addDays(w.weekStart, -7) && o.date < w.weekStart) {
+        w.factor *= k.after;
+        w.note = w.note ?? `Recovery after ${o.name} (${o.priority})`;
+      }
+    }
   }
   return weeks;
 }
@@ -353,6 +379,38 @@ function sessionsFor(dow: number, ctx: Ctx): Draft[] {
   }
 }
 
+/** Which weekdays (Monday = 0 ... Sunday = 6) the user can train, and which day gets the long session. */
+export type TrainingPrefs = { days: number[]; longDay: number };
+
+/**
+ * Re-lays one template week (7 days of sessions, Monday first) onto the user's available days. The long session
+ * goes on `longDay` (a triathlon's long run on the next available day), the other sessions fill the remaining
+ * available days in their usual order, and if there are more sessions than days the last ones are dropped.
+ * Spacing hard and easy days is not re-checked, so the user's choice of days is respected as given.
+ */
+export function layoutWeek(template: Draft[][], prefs: TrainingPrefs, family: Family): Draft[][] {
+  const days = [...new Set(prefs.days.filter((d) => d >= 0 && d <= 6))].sort((a, b) => a - b);
+  if (!days.length) return template;
+  const longDay = days.includes(prefs.longDay) ? prefs.longDay : days[days.length - 1];
+  const out: Draft[][] = Array.from({ length: 7 }, () => []);
+  const longIdx = family === "tri" ? [5, 6] : [5];
+  const free = days.filter((d) => d !== longDay);
+
+  if (template[5]?.length) out[longDay] = template[5];
+  if (family === "tri" && template[6]?.length) {
+    const after = [...days.filter((d) => d > longDay), ...days.filter((d) => d < longDay)].find((d) => d !== longDay);
+    if (after !== undefined) {
+      out[after] = template[6];
+      free.splice(free.indexOf(after), 1);
+    }
+  }
+  const regular = template.map((d, i) => ({ d, i })).filter((x) => !longIdx.includes(x.i) && x.d.length > 0);
+  regular.slice(0, free.length).forEach((x, n) => {
+    out[free[n]] = x.d;
+  });
+  return out;
+}
+
 function raceDay(type: RaceType, name: string): Draft {
   const fam = familyOf(type);
   return {
@@ -382,13 +440,19 @@ export function generatePlan(opts: {
   startDate: string;
   /** Only A races get a full taper. B and C races get a one-week reduction so they don't wreck the A-race build. */
   priority?: "A" | "B" | "C";
+  /** The user's training days and long-session day. Without it the default weekly template is used. */
+  prefs?: TrainingPrefs | null;
+  /** Other upcoming races to work around. */
+  others?: OtherRace[];
 }): PlannedWorkout[] {
   const { raceType, raceName, raceDate, startDate } = opts;
   const taperOverride = opts.priority && opts.priority !== "A" ? 1 : undefined;
   const family = familyOf(raceType);
   const out: PlannedWorkout[] = [];
 
-  for (const week of planWeeks(raceType, startDate, raceDate, taperOverride)) {
+  for (const week of planWeeks(raceType, startDate, raceDate, taperOverride, opts.others ?? [])) {
+    const template = Array.from({ length: 7 }, (_, dow) => sessionsFor(dow, { phase: week.phase, f: week.factor, type: raceType, family }));
+    const laidOut = opts.prefs ? layoutWeek(template, opts.prefs, family) : template;
     for (let dow = 0; dow < 7; dow++) {
       const date = addDays(week.weekStart, dow);
       if (date < startDate || date > raceDate) continue;
@@ -397,7 +461,7 @@ export function generatePlan(opts: {
       if (date === raceDate) drafts = [raceDay(raceType, raceName)];
       else if (date === addDays(raceDate, -1)) drafts = [shakeout(family)];
       else if (date === addDays(raceDate, -2)) drafts = []; // rest
-      else drafts = sessionsFor(dow, { phase: week.phase, f: week.factor, type: raceType, family });
+      else drafts = laidOut[dow];
 
       for (const d of drafts) out.push({ workout_date: date, ...d });
     }
