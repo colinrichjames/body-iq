@@ -1,5 +1,7 @@
-import { applyCoach, keepTargets, logWeighIn, saveGoal } from "@/app/(app)/nutrition/coach-actions";
-import { checkinDue, GOAL_LABEL, type GoalMode } from "@/lib/coach";
+import Link from "next/link";
+import { applyCoach, keepTargets, logWeighIn } from "@/app/(app)/nutrition/coach-actions";
+import { checkinDue } from "@/lib/coach";
+import { GOALS } from "@/lib/goals";
 import type { CoachState } from "@/lib/coach-data";
 import { btnGhost, btnPrimary, card, field } from "@/components/ui";
 import { SubmitButton } from "@/components/submit-button";
@@ -14,11 +16,15 @@ export function CoachCard({ coach, today, from }: { coach: CoachState; today: st
     <section id="coach" className={`${card} mt-5 scroll-mt-4`}>
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-sm text-zinc-400">Coach</h2>
-        {mode && <span className="text-xs text-zinc-500">Goal: {GOAL_LABEL[mode].toLowerCase()}</span>}
+        {coach.goal ? (
+          <Link href="/profile#goal" className="text-xs text-zinc-500 underline">Goal: {GOALS[coach.goal].label.toLowerCase()}</Link>
+        ) : (
+          <Link href="/profile#goal" className="text-xs text-emerald-400 underline">Set a goal</Link>
+        )}
       </div>
 
       <p className={`mt-2 font-medium ${advice.status === "adjust" ? "text-amber-300" : advice.status === "on_track" ? "text-emerald-400" : "text-zinc-200"}`}>{!mode && advice.status === "need_data" ? "Pick a goal to start" : advice.headline}</p>
-      <p className="mt-1 text-sm text-zinc-400">{mode ? advice.detail : "Choose lose, maintain or gain below and log your weight. Each week the coach compares your weight trend with your goal and suggests a small calorie change."}</p>
+      <p className="mt-1 text-sm text-zinc-400">{mode ? advice.detail : "Set your goal in Profile and log your weight. Each week the coach compares your weight trend with your goal and suggests a small calorie change."}</p>
 
       {trend && (
         <p className="mt-3 text-sm text-zinc-300">
@@ -54,25 +60,6 @@ export function CoachCard({ coach, today, from }: { coach: CoachState; today: st
       </form>
       {coach.recent.length > 0 && <p className="mt-2 text-xs text-zinc-500">Recent: {coach.recent.map((p) => `${p.weight} (${formatDay(p.day)})`).join(" · ")}</p>}
 
-      <details className="mt-4 text-sm" open={!mode}>
-        <summary className="cursor-pointer text-zinc-400">Goal and pace</summary>
-        <form action={saveGoal} className="mt-3 space-y-3">
-          <input type="hidden" name="from" value={from} />
-          <div className="grid grid-cols-3 gap-1">
-            {(Object.keys(GOAL_LABEL) as GoalMode[]).map((g) => (
-              <label key={g} className="block">
-                <input type="radio" name="goal_mode" value={g} defaultChecked={mode === g} className="peer sr-only" />
-                <span className="block cursor-pointer rounded-lg border border-zinc-800 py-2 text-center text-xs text-zinc-400 peer-checked:border-emerald-500 peer-checked:bg-emerald-500/20 peer-checked:text-emerald-300">{GOAL_LABEL[g]}</span>
-              </label>
-            ))}
-          </div>
-          <label className="block text-zinc-400">
-            Pace (lb per week, blank = 1 to lose, 0.5 to gain)
-            <input name="goal_rate" type="number" inputMode="decimal" step="0.25" min="0" max="2" defaultValue={coach.rate ?? ""} className={`${field} mt-1`} />
-          </label>
-          <SubmitButton className={`${btnGhost} w-full`}>Save goal</SubmitButton>
-        </form>
-      </details>
     </section>
   );
 }

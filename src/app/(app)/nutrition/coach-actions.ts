@@ -6,9 +6,10 @@ import { requireUser } from "@/lib/auth";
 import { flash } from "@/lib/flash";
 import { getToday } from "@/lib/today";
 import { isIsoDate } from "@/lib/dates";
-import { CALORIE_FLOOR, type GoalMode } from "@/lib/coach";
+import { CALORIE_FLOOR } from "@/lib/coach";
+import { GOALS, isGoalType } from "@/lib/goals";
 
-const BACK = new Set(["/nutrition", "/dashboard"]);
+const BACK = new Set(["/nutrition", "/dashboard", "/profile"]);
 const backOf = (formData: FormData) => {
   const from = String(formData.get("from") ?? "/nutrition");
   return BACK.has(from) ? from : "/nutrition";
@@ -29,16 +30,19 @@ export async function logWeighIn(formData: FormData) {
   redirect(flash(back, "Weight saved."));
 }
 
-/** Saves the goal (lose, maintain or gain) and the pace in lb per week. */
+/** Saves the goal and the pace in lb per week. The goal sets the calorie direction and a default pace. */
 export async function saveGoal(formData: FormData) {
   const { supabase, userId } = await requireUser();
   const back = backOf(formData);
-  const mode = String(formData.get("goal_mode") ?? "") as GoalMode;
-  if (!["lose", "maintain", "gain"].includes(mode)) redirect(flash(back, "Pick a goal."));
+  const goal = formData.get("goal_type");
+  if (!isGoalType(goal)) redirect(flash(back, "Pick a goal."));
+  const g = GOALS[goal];
   const raw = String(formData.get("goal_rate") ?? "").trim();
-  const rate = raw === "" ? null : Number(raw);
+  const rate = raw === "" ? g.rate : Number(raw);
   if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 2)) redirect(flash(back, "Pace must be between 0 and 2 lb a week."));
-  const { error } = await supabase.from("profiles").upsert({ id: userId, goal_mode: mode, goal_rate_lb_week: mode === "maintain" ? null : rate }, { onConflict: "id" });
+  const { error } = await supabase
+    .from("profiles")
+    .upsert({ id: userId, goal_type: goal, goal_mode: g.mode, goal_rate_lb_week: g.mode === "maintain" ? null : rate }, { onConflict: "id" });
   if (error) redirect(flash(back, `Couldn't save your goal: ${error.message}`));
   revalidatePath("/", "layout");
   redirect(flash(back, "Goal saved."));
