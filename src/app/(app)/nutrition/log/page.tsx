@@ -32,7 +32,7 @@ type Entry = {
 };
 
 const MEALS = ["breakfast", "lunch", "dinner", "snack", "other"];
-const MEAL_LABEL: Record<string, string> = { other: "Day totals" };
+const MEAL_LABEL: Record<string, string> = { other: "Quick add: whole day" };
 
 export default async function FoodLogPage({ searchParams }: { searchParams: Promise<{ d?: string; meal?: string }> }) {
   const { d, meal: mealParam } = await searchParams;

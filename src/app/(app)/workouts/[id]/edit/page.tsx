@@ -1,4 +1,5 @@
 import { PaceHint } from "@/components/pace-hint";
+import { StrengthOnly } from "@/components/strength-only";
 import { SubmitButton } from "@/components/submit-button";
 import { fromKm } from "@/lib/distance";
 import Link from "next/link";
@@ -47,11 +48,24 @@ export default async function EditWorkoutPage({ params, searchParams }: { params
         <PaceHint />
         <input name="workout_date" type="date" defaultValue={w.workout_date} required className={field} />
         <Field label="Notes and details"><textarea name="description" rows={4} defaultValue={w.description ?? ""} className={field} /></Field>
-        <ExerciseEditor initial={s?.exercises ?? []} />
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Circuit rounds"><input name="rounds" type="number" inputMode="numeric" min="1" defaultValue={s?.rounds ?? ""} className={field} /></Field>
-          <Field label="Rest seconds"><input name="rest_sec" type="number" inputMode="numeric" min="0" defaultValue={s?.rest_sec ?? ""} className={field} /></Field>
-        </div>
+        {/* A run, bike or swim has no exercise list. A session that already has exercises keeps showing them. */}
+        {(s?.exercises?.length ?? 0) > 0 ? (
+          <>
+            <ExerciseEditor initial={s?.exercises ?? []} />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Circuit rounds"><input name="rounds" type="number" inputMode="numeric" min="1" defaultValue={s?.rounds ?? ""} className={field} /></Field>
+              <Field label="Rest seconds"><input name="rest_sec" type="number" inputMode="numeric" min="0" defaultValue={s?.rest_sec ?? ""} className={field} /></Field>
+            </div>
+          </>
+        ) : (
+          <StrengthOnly initialSport={w.sport}>
+            <ExerciseEditor initial={s?.exercises ?? []} />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Circuit rounds"><input name="rounds" type="number" inputMode="numeric" min="1" defaultValue={s?.rounds ?? ""} className={field} /></Field>
+              <Field label="Rest seconds"><input name="rest_sec" type="number" inputMode="numeric" min="0" defaultValue={s?.rest_sec ?? ""} className={field} /></Field>
+            </div>
+          </StrengthOnly>
+        )}
         {s?.blocks && s.blocks.length > 0 && <p className="text-xs text-zinc-500">This session&apos;s timed blocks are kept as they are.</p>}
         <p className="text-xs text-zinc-500">Saving marks this session as yours, so plan re-alignment won&apos;t overwrite it.</p>
         <SubmitButton className={`${btnPrimary} w-full`}>Save changes</SubmitButton>

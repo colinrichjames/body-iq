@@ -9,6 +9,7 @@ import { ExerciseEditor } from "../exercise-editor";
 import { DraftForm } from "@/components/draft-form";
 import { Field } from "@/components/field";
 import { PaceHint } from "@/components/pace-hint";
+import { StrengthOnly } from "@/components/strength-only";
 
 export default async function NewWorkoutPage({ searchParams }: { searchParams: Promise<{ error?: string; date?: string }> }) {
   const { error, date } = await searchParams;
@@ -47,11 +48,13 @@ export default async function NewWorkoutPage({ searchParams }: { searchParams: P
         <PaceHint />
         <input name="workout_date" type="date" defaultValue={date && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : today} required className={field} />
         <Field label="Details"><textarea name="description" rows={4} placeholder="e.g. 10 min warm-up, 3 x 8 min at threshold" className={field} /></Field>
-        <ExerciseEditor initial={[]} draftKey="workout-new" />
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Circuit rounds (optional)"><input name="rounds" type="number" inputMode="numeric" min="1" className={field} /></Field>
-          <Field label="Rest seconds"><input name="rest_sec" type="number" inputMode="numeric" min="0" className={field} /></Field>
-        </div>
+        <StrengthOnly initialSport="run">
+          <ExerciseEditor initial={[]} draftKey="workout-new" />
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Circuit rounds (optional)"><input name="rounds" type="number" inputMode="numeric" min="1" className={field} /></Field>
+            <Field label="Rest seconds"><input name="rest_sec" type="number" inputMode="numeric" min="0" className={field} /></Field>
+          </div>
+        </StrengthOnly>
         <SubmitButton className={`${btnPrimary} w-full`}>Save workout</SubmitButton>
       </DraftForm>
     </main>

@@ -17,8 +17,17 @@ describe("FirstRunChecklist", () => {
   });
   it("hides hints for finished steps", () => {
     render(<FirstRunChecklist items={buildChecklist({ races: 1, hasTargets: true, scans: 1, workouts: 1, foodEntries: 1, garminConnected: false })} dismiss={async () => {}} />);
-    expect(screen.getByText("5 of 5 done")).toBeTruthy();
     expect(screen.queryByText(/builds your training plan backwards/i)).toBeNull();
     expect(screen.getByRole("button", { name: /hide this/i })).toBeTruthy();
+  });
+  it("shows an all-set state, with the optional Garmin step, once every required step is done", () => {
+    render(<FirstRunChecklist items={buildChecklist({ races: 1, hasTargets: true, scans: 1, workouts: 1, foodEntries: 1, garminConnected: false })} dismiss={async () => {}} />);
+    expect(screen.getByText(/You're all set up/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /connect garmin/i }).getAttribute("href")).toBe("/connect");
+  });
+  it("marks finished steps with a tick, not a strike-through", () => {
+    const { container } = render(<FirstRunChecklist items={buildChecklist({ ...empty, races: 1 })} dismiss={async () => {}} />);
+    expect(container.querySelector(".line-through")).toBeNull();
+    expect(screen.getByRole("link", { name: /add a race/i }).textContent).toContain("✓");
   });
 });
