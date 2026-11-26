@@ -7,7 +7,7 @@ const source: Workout = {
   planned_duration_min: 20, structure: { exercises: [{ name: "Strides", sets: 4, reps: 6 }] } as never, status: "completed", progress: null,
   block_results: null, race_id: "r1", generated: true, actual_duration_min: 22, actual_distance_km: 3.5, planned_distance_km: 3.2187, distance_unit: "mi",
   avg_hr: 150, avg_power: null, activity_id: "a1", rpe: 6, notes: "felt good", fuel_carbs_g: 30, fluid_ml: 500, sodium_mg: 200,
-  completed_at: "2026-11-27T10:00:00Z", created_at: "2026-11-20T10:00:00Z",
+  completed_at: "2026-11-27T10:00:00Z", adaptation_handled_at: null, created_at: "2026-11-20T10:00:00Z",
 };
 
 describe("copyRow", () => {

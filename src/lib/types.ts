@@ -107,6 +107,8 @@ export type Workout = {
   fluid_ml: number | null;
   sodium_mg: number | null;
   completed_at: string | null;
+  /** Set when the user accepted or dismissed the coach's offer about this skipped or missed session. */
+  adaptation_handled_at: string | null;
   created_at: string;
 };
 
