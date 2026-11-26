@@ -2,7 +2,7 @@
 
 import { flash } from "@/lib/flash";
 import { toTrash, withUndo } from "@/lib/trash";
-import { isUnit, paceProblem, sessionPaceProblem, toKm, type DistUnit } from "@/lib/distance";
+import { isUnit, sessionPaceProblem, toKm, type DistUnit } from "@/lib/distance";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
@@ -54,7 +54,7 @@ export async function addWorkout(formData: FormData) {
   if (!title) back("Give the workout a title.");
   if (!SPORTS.includes(sport)) back("Pick a sport.");
   if (!isIsoDate(date)) back("Pick a date.");
-  const paceIssue = sessionPaceProblem(sport, numOrNull(formData.get("planned_duration_min")), distanceFields(formData).planned_distance_km);
+  const paceIssue = sessionPaceProblem(sport, numOrNull(formData.get("planned_duration_min")), distanceFields(formData).planned_distance_km, String(formData.get("title") ?? ""));
   if (paceIssue) back(paceIssue);
 
   const { error } = await supabase.from("workouts").insert({
@@ -82,8 +82,8 @@ export async function setStatus(formData: FormData) {
   if (!["planned", "completed", "skipped"].includes(status)) return;
   if (status === "completed") {
     // Mark done records the planned numbers as done, so an impossible pace is blocked here too.
-    const { data: cur } = await supabase.from("workouts").select("sport,planned_duration_min,planned_distance_km").eq("id", id).maybeSingle<{ sport: string; planned_duration_min: number | null; planned_distance_km: number | null }>();
-    const issue = cur ? sessionPaceProblem(cur.sport, cur.planned_duration_min, cur.planned_distance_km) : null;
+    const { data: cur } = await supabase.from("workouts").select("sport,title,planned_duration_min,planned_distance_km").eq("id", id).maybeSingle<{ sport: string; title: string; planned_duration_min: number | null; planned_distance_km: number | null }>();
+    const issue = cur ? sessionPaceProblem(cur.sport, cur.planned_duration_min, cur.planned_distance_km, cur.title) : null;
     if (issue) redirect(flash(`/workouts/${id}`, `${issue} Edit the workout first.`));
   }
   if (status === "planned") {
@@ -210,12 +210,10 @@ export async function finishWorkout(input: {
   const { supabase, userId } = await requireUser();
   const rpe = input.rpe !== null && input.rpe >= 1 && input.rpe <= 10 ? Math.round(input.rpe) : null;
 
-  const { data: cur } = await supabase.from("workouts").select("sport").eq("id", input.id).maybeSingle<{ sport: string }>();
+  const { data: cur } = await supabase.from("workouts").select("sport,title").eq("id", input.id).maybeSingle<{ sport: string; title: string }>();
   const km = input.distanceKm && input.distanceKm > 0 && input.distanceKm < 1000 ? Math.round(input.distanceKm * 10000) / 10000 : null;
-  if (cur?.sport === "run") {
-    const problem = paceProblem(input.actualMinutes, km);
-    if (problem) return { error: problem };
-  }
+  const problem = cur ? sessionPaceProblem(cur.sport, input.actualMinutes, km, cur.title) : null;
+  if (problem) return { error: problem };
 
   const { error } = await supabase
     .from("workouts")
@@ -318,7 +316,7 @@ export async function updateWorkout(formData: FormData) {
   if (!title) back("Give the workout a title.");
   if (!SPORTS.includes(sport)) back("Pick a sport.");
   if (!isIsoDate(date)) back("Pick a date.");
-  const paceIssue = sessionPaceProblem(sport, numOrNull(formData.get("planned_duration_min")), distanceFields(formData).planned_distance_km);
+  const paceIssue = sessionPaceProblem(sport, numOrNull(formData.get("planned_duration_min")), distanceFields(formData).planned_distance_km, String(formData.get("title") ?? ""));
   if (paceIssue) back(paceIssue);
 
   const { data: prev } = await supabase.from("workouts").select("structure").eq("id", id).maybeSingle<{ structure: WorkoutStructure | null }>();

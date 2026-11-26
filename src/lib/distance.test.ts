@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtDist, fmtPace, fromKm, paceProblem, sessionPaceProblem, toKm } from "./distance";
+import { fmtDist, fmtPace, fromKm, paceProblem, sessionPaceProblem, toKm, paceLabel } from "./distance";
 
 describe("distance", () => {
   it("3.1 mi round-trips exactly", () => {
@@ -48,5 +48,29 @@ describe("distance round trip", () => {
     const back = fromKm(Number("4.9890"), "mi");
     expect(back).toBe(3.1);
     expect(String(back)).toBe("3.1");
+  });
+});
+
+describe("per-sport pace bands", () => {
+  it("blocks impossible swim, bike and row paces", () => {
+    expect(sessionPaceProblem("swim", 1, 1)).toMatch(/pace looks off/); // 0:06 /100 m
+    expect(sessionPaceProblem("swim", 600, 1)).toMatch(/pace looks off/);
+    expect(sessionPaceProblem("swim", 30, 1.5)).toBeNull(); // 2:00 /100 m
+    expect(sessionPaceProblem("bike", 5, 30)).toMatch(/pace looks off/); // 360 km/h
+    expect(sessionPaceProblem("bike", 600, 5)).toMatch(/pace looks off/);
+    expect(sessionPaceProblem("bike", 60, toKm(18, "mi"))).toBeNull();
+    expect(sessionPaceProblem("other", 1, 5, "Row 5k")).toMatch(/pace looks off/);
+    expect(sessionPaceProblem("other", 20, 5, "Row 5k")).toBeNull(); // 2:00 /500 m
+  });
+  it("leaves other sports and missing numbers alone", () => {
+    expect(sessionPaceProblem("strength", 1, 50)).toBeNull();
+    expect(sessionPaceProblem("other", 1, 50, "Hike")).toBeNull();
+    expect(sessionPaceProblem("bike", null, 20)).toBeNull();
+  });
+  it("shows the pace in the unit that fits the sport", () => {
+    expect(paceLabel("swim", 30, 1.5, "mi")).toBe("2:00 /100 m");
+    expect(paceLabel("other", 20, 5, "km", "Row 5k")).toBe("2:00 /500 m");
+    expect(paceLabel("bike", 60, toKm(18, "mi"), "mi")).toBe("18 mph");
+    expect(paceLabel("strength", 60, 5, "mi")).toBeNull();
   });
 });

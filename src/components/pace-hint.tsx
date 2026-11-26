@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fmtPace, isUnit, sessionPaceProblem, toKm, type DistUnit } from "@/lib/distance";
+import { isUnit, paceLabel, sessionPaceProblem, toKm, type DistUnit } from "@/lib/distance";
 
 /**
  * Shows the pace that the form's minutes and distance work out to, before the user saves. A pace outside the sane band
@@ -18,13 +18,14 @@ export function PaceHint() {
     const read = () => {
       const get = (n: string) => (form.elements.namedItem(n) as HTMLInputElement | HTMLSelectElement | null)?.value ?? "";
       const sport = get("sport");
+      const title = get("title");
       const minutes = Number(get("planned_duration_min"));
       const dist = Number(get("planned_distance"));
       const u = get("distance_unit");
       const unit: DistUnit = isUnit(u) ? u : "mi";
-      if (sport !== "run" || !(minutes > 0) || !(dist > 0)) return setState({ pace: null, problem: null });
+      if (!(minutes > 0) || !(dist > 0)) return setState({ pace: null, problem: null });
       const km = toKm(dist, unit);
-      setState({ pace: fmtPace(minutes, km, unit), problem: sessionPaceProblem(sport, minutes, km) });
+      setState({ pace: paceLabel(sport, minutes, km, unit, title), problem: sessionPaceProblem(sport, minutes, km, title) });
     };
     read();
     form.addEventListener("input", read);

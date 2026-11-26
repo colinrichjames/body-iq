@@ -19,7 +19,7 @@ import type { DailyHealth, RecoveryCheckin } from "@/lib/types";
 import { sessionInsights, type SessionInsights } from "@/lib/session-insights";
 import { prText } from "@/lib/lifting";
 import { GYM_READY, isStale, isSwapped, stationsIn } from "@/lib/hyrox-swaps";
-import { fmtDist, fmtPace, sessionPaceProblem } from "@/lib/distance";
+import { fmtDist, paceKind, paceLabel, sessionPaceProblem } from "@/lib/distance";
 import { canStartOrFinish, headerFacts } from "@/lib/workout-header";
 import { buildSteps } from "@/lib/steps";
 import { restSummary } from "@/lib/context";
@@ -52,7 +52,7 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
     suggestions = (acts ?? []).filter((a) => !usedIds.has(a.id) && garminSport(a.sport) === w.sport);
   }
   const unit = w.distance_unit ?? "mi";
-  const pace = w.actual_distance_km && w.actual_duration_min && w.sport !== "swim" ? fmtPace(w.actual_duration_min, w.actual_distance_km, unit) : null;
+  const pace = paceLabel(w.sport, w.actual_duration_min, w.actual_distance_km, unit, w.title);
   const fuel = sessionFuel(w);
   const totals = sessionTotals(w.actual_duration_min ?? w.planned_duration_min ?? 0, w.sport);
   const check = fuelCheck(w);
@@ -378,10 +378,10 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       )}
 
       <div className="mt-6 space-y-3">
-        {canStartOrFinish(w.status) && w.sport === "run" && w.planned_duration_min && w.planned_distance_km ? (
-          <p className={`text-sm ${sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km) ? "text-red-400" : "text-zinc-400"}`}>
-            Pace {fmtPace(w.planned_duration_min, w.planned_distance_km, w.distance_unit)}
-            {sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km) ? `. ${sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km)} Edit it before marking done.` : ""}
+        {canStartOrFinish(w.status) && paceLabel(w.sport, w.planned_duration_min, w.planned_distance_km, w.distance_unit, w.title) ? (
+          <p className={`text-sm ${sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km, w.title) ? "text-red-400" : "text-zinc-400"}`}>
+            {paceKind(w.sport, w.title) === "bike" ? "Speed" : "Pace"} {paceLabel(w.sport, w.planned_duration_min, w.planned_distance_km, w.distance_unit, w.title)}
+            {sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km, w.title) ? `. ${sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km, w.title)} Edit it before marking done.` : ""}
           </p>
         ) : null}
         {canStartOrFinish(w.status) && (

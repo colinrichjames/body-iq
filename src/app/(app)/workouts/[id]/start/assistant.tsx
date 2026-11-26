@@ -9,7 +9,7 @@ import { buildSteps } from "@/lib/steps";
 import { elapsedMs as elapsedAt, pickResume } from "@/lib/progress";
 import { isDumbbell } from "@/lib/context";
 import { applyOrder, moveExercise, queueOverview, stepKey } from "@/lib/queue";
-import { fmtPace, fromKm, paceProblem, toKm, type DistUnit } from "@/lib/distance";
+import { fmtPace, fromKm, paceKind, paceLabel, sessionPaceProblem, toKm, type DistUnit } from "@/lib/distance";
 import { fmtTime } from "@/lib/hyrox";
 import { countSets, recap, totalVolume, volumeByExercise, skipExerciseLogs, skippedLog } from "@/lib/player";
 import { prepareOffline } from "@/lib/offline";
@@ -419,13 +419,11 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
     setError(null);
     const m = Number(minutes);
     const km = distance === "" ? null : toKm(Number(distance), unit);
-    if (workout.sport === "run") {
-      const problem = paceProblem(Number.isFinite(m) && minutes !== "" ? m : null, km);
-      if (problem) {
-        setError(problem);
-        setSaving(false);
-        return;
-      }
+    const problem = sessionPaceProblem(workout.sport, Number.isFinite(m) && minutes !== "" ? m : null, km, workout.title);
+    if (problem) {
+      setError(problem);
+      setSaving(false);
+      return;
     }
     const res = await finishWorkout({
       id: workout.id,
@@ -552,9 +550,10 @@ export function Assistant({ workout, lastWeights, lastTime, serverResume, target
                 </label>
               </div>
               {distance !== "" && Number(minutes) > 0 && Number(distance) > 0 && (
-                <p className="text-sm text-zinc-500">
-                  Pace {fmtPace(Number(minutes), toKm(Number(distance), unit), unit)}
-                  {lastEndurance?.km && lastEndurance.minutes
+                <p className={`text-sm ${sessionPaceProblem(workout.sport, Number(minutes), toKm(Number(distance), unit), workout.title) ? "text-red-400" : "text-zinc-500"}`}>
+                  {paceKind(workout.sport, workout.title) === "bike" ? "Speed" : "Pace"} {paceLabel(workout.sport, Number(minutes), toKm(Number(distance), unit), unit, workout.title) ?? fmtPace(Number(minutes), toKm(Number(distance), unit), unit)}
+                  {sessionPaceProblem(workout.sport, Number(minutes), toKm(Number(distance), unit), workout.title) ? " (not realistic)" : ""}
+                  {lastEndurance?.km && lastEndurance.minutes && paceKind(workout.sport, workout.title) === "run"
                     ? ` · last time ${fmtPace(lastEndurance.minutes, lastEndurance.km, unit)} over ${fromKm(lastEndurance.km, unit)} ${unit}`
                     : ""}
                 </p>
