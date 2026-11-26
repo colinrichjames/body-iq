@@ -9,6 +9,7 @@ import type { Profile, Workout } from "@/lib/types";
 import { addWater, deleteFoodEntry, favoriteEntry, finishDay, reopenDay } from "./actions";
 import { hydrationTarget } from "@/lib/fuel";
 import { FoodAdder } from "./food-adder";
+import { isDiaryMeal } from "@/lib/diary";
 import { SaveMeal } from "./save-meal";
 import { frequentFoods, recentFoods, sumItems, type SavedFood, type MealItem } from "@/lib/meals";
 import { loggingStreak, macroSplit, micronutrients } from "@/lib/food-stats";
@@ -33,8 +34,8 @@ type Entry = {
 const MEALS = ["breakfast", "lunch", "dinner", "snack", "other"];
 const MEAL_LABEL: Record<string, string> = { other: "Day totals" };
 
-export default async function FoodLogPage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
-  const { d } = await searchParams;
+export default async function FoodLogPage({ searchParams }: { searchParams: Promise<{ d?: string; meal?: string }> }) {
+  const { d, meal: mealParam } = await searchParams;
   const { supabase, userId } = await requireUser();
   const today = await getToday();
   const day = d && isIsoDate(d) ? d : today;
@@ -197,7 +198,7 @@ export default async function FoodLogPage({ searchParams }: { searchParams: Prom
         </p>
       </section>
 
-      <FoodAdder key={day + list.length} day={day} recents={recents} frequent={frequent} favourites={favourites} meals={meals} />
+      <FoodAdder key={day + list.length} day={day} initialMeal={isDiaryMeal(mealParam) ? mealParam : undefined} recents={recents} frequent={frequent} favourites={favourites} meals={meals} />
 
       {MEALS.map((m) => {
         const items = list.filter((e) => e.meal === m);

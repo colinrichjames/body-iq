@@ -11,7 +11,7 @@ export function CoachCard({ coach, today, from }: { coach: CoachState; today: st
   const due = checkinDue(coach.lastChecked, today);
   const showAdvice = advice.status === "adjust" && due;
   return (
-    <section className={`${card} mt-5`}>
+    <section id="coach" className={`${card} mt-5 scroll-mt-4`}>
       <div className="flex items-baseline justify-between gap-3">
         <h2 className="text-sm text-zinc-400">Coach</h2>
         {mode && <span className="text-xs text-zinc-500">Goal: {GOAL_LABEL[mode].toLowerCase()}</span>}

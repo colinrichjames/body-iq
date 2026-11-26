@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { addDays, formatDay } from "@/lib/dates";
+import { addDays, formatDay, isIsoDate } from "@/lib/dates";
 import { getToday } from "@/lib/today";
 import { macroMismatch, targetsFor } from "@/lib/targets";
 import type { NutritionDay, Profile, Workout } from "@/lib/types";
@@ -11,15 +11,18 @@ import { DraftForm } from "@/components/draft-form";
 import { SubmitButton } from "@/components/submit-button";
 import { Field } from "@/components/field";
 import { CoachCard } from "@/components/coach-card";
+import { FuelToday, type DiaryItem } from "@/components/fuel-today";
+import { loggingStreak } from "@/lib/food-stats";
 import { loadCoach } from "@/lib/coach-data";
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
-export default async function NutritionPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
-  const { error } = await searchParams;
+export default async function NutritionPage({ searchParams }: { searchParams: Promise<{ error?: string; d?: string }> }) {
+  const { error, d } = await searchParams;
   const { supabase, userId } = await requireUser();
   const today = await getToday();
   const since = addDays(today, -13);
+  const day = d && isIsoDate(d) ? d : today;
 
   const [{ data: profile }, { data: days }, { data: wk }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
@@ -27,6 +30,20 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
     supabase.from("workouts").select("*").gte("workout_date", since).lte("workout_date", today).returns<Workout[]>(),
   ]);
   const coach = await loadCoach(supabase, today, profile ?? null);
+
+  type Food = { day: string; meal: string; name: string; calories: number; protein_g: number; carbs_g: number; fat_g: number };
+  const [{ data: foodRows }, { data: dayWorkouts }, { data: finishedRows }] = await Promise.all([
+    supabase.from("food_entries").select("day,meal,name,calories,protein_g,carbs_g,fat_g").in("day", [day, addDays(day, -1)]).order("created_at").returns<Food[]>(),
+    supabase.from("workouts").select("*").eq("workout_date", day).returns<Workout[]>(),
+    supabase.from("day_finishes").select("day").gte("day", addDays(today, -400)).returns<{ day: string }[]>(),
+  ]);
+  const todays = (foodRows ?? []).filter((f) => f.day === day);
+  const meals: Record<string, DiaryItem[]> = {};
+  for (const f of todays) (meals[f.meal] ??= []).push({ name: f.name, calories: Number(f.calories) });
+  const yesterday: Record<string, string[]> = {};
+  for (const f of (foodRows ?? []).filter((x) => x.day === addDays(day, -1))) (yesterday[f.meal] ??= []).push(f.name);
+  const sum = (k: "calories" | "protein_g" | "carbs_g" | "fat_g") => todays.reduce((a, f) => a + Number(f[k]), 0);
+  const finished = (finishedRows ?? []).map((r) => r.day);
   const workouts = wk ?? [];
   const rows = days ?? [];
   const week = rows.filter((d) => d.day >= addDays(today, -6) && (d.calories ?? 0) > 0);
@@ -45,7 +62,17 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
 
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight">Nutrition</h1>
+      <FuelToday
+        day={day}
+        today={today}
+        finished={finished}
+        streak={loggingStreak(finished, today).current}
+        targets={targetsFor(day, dayWorkouts ?? [], profile ?? null)}
+        totals={{ calories: sum("calories"), protein: sum("protein_g"), carbs: sum("carbs_g"), fat: sum("fat_g") }}
+        meals={meals}
+        yesterday={yesterday}
+        needsWeight={!coach.recent.some((r) => r.day === day) && day <= today}
+      />
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
 
       <CoachCard coach={coach} today={today} from="/nutrition" />
@@ -73,9 +100,6 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
         )}
       </section>
 
-      <Link href="/nutrition/log" className="mt-5 block rounded-2xl bg-emerald-500 px-4 py-3.5 text-center font-medium text-zinc-950 active:bg-emerald-400">
-        Log food: scan, search or add by hand
-      </Link>
 
       <Importer />
 

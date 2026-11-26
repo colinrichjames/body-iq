@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
-import { isIsoDate } from "@/lib/dates";
+import { addDays, isIsoDate } from "@/lib/dates";
+import { getToday } from "@/lib/today";
 import { syncFoodDay } from "@/lib/food-sync";
 import { toTrash, withUndo } from "@/lib/trash";
 import { cleanItems, entriesFor, rowToItem, type MealItem, type SavedKind } from "@/lib/meals";
@@ -288,4 +289,14 @@ export async function reopenDay(formData: FormData) {
   await supabase.from("day_finishes").delete().eq("day", day);
   revalidatePath("/", "layout");
   redirect(flash(`/nutrition/log?d=${day}`, "Day reopened."));
+}
+
+/** One-tap "log yesterday's meal again": copies the same meal from the day before into this day. */
+export async function logYesterdayMeal(formData: FormData) {
+  const day = String(formData.get("day") ?? "");
+  const meal = String(formData.get("meal") ?? "");
+  if (!isIsoDate(day) || !MEALS.includes(meal)) redirect("/nutrition");
+  const back = `/nutrition${day === (await getToday()) ? "" : `?d=${day}`}`;
+  const res = await copyMeal(addDays(day, -1), meal, day, meal);
+  redirect(flash(back, res.error ?? `Logged yesterday's ${meal} again.`));
 }
