@@ -78,6 +78,14 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
         </Link>
       </div>
 
+      <Link href="/workouts/quick" className="mt-4 flex items-center justify-between rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 active:bg-emerald-500/20">
+        <span>
+          <span className="block font-medium text-emerald-300">Quick start</span>
+          <span className="block text-xs text-zinc-400">Empty workout, repeat your last, or pick exercises</span>
+        </span>
+        <span aria-hidden="true" className="text-xl text-emerald-300">&rsaquo;</span>
+      </Link>
+
       <div className="mt-4 flex items-center justify-between text-sm">
         <Link href={`/workouts?d=${addDays(weekStart, -7)}`} className="px-2 py-1 text-zinc-400">
           &larr; Prev

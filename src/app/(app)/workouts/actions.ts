@@ -12,6 +12,7 @@ import { classify } from "@/lib/intensity";
 import { nextEasyDay } from "@/lib/stacking";
 import { getToday } from "@/lib/today";
 import { buildStructure, exercisesFromForm } from "@/lib/structure";
+import { quickTitle } from "@/lib/quick-start";
 import { hasProgress } from "@/lib/progress";
 import { plannedSetLogs } from "@/lib/lifting";
 import { revertStructure, swapStructure } from "@/lib/hyrox-swaps";
@@ -538,4 +539,47 @@ export async function logSessionFuel(formData: FormData) {
   if (error) redirect(`/workouts/${id}?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/", "layout");
   redirect(flash(`/workouts/${id}`, "Fuel and fluids saved."));
+}
+
+/**
+ * Quick Start: create today's workout in one tap and open the player.
+ * mode "empty" makes a bare timer session, "repeat" copies the last finished lifting session, otherwise the picked exercises are used.
+ */
+export async function startQuickWorkout(formData: FormData) {
+  const { supabase, userId } = await requireUser();
+  const today = await getToday();
+  const mode = String(formData.get("mode") ?? "pick");
+  const hour = Number(formData.get("hour"));
+  let title = quickTitle(Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 12);
+  let structure: WorkoutStructure | null = null;
+  const back = (m: string) => redirect(`/workouts/quick?error=${encodeURIComponent(m)}`);
+
+  if (mode === "repeat") {
+    const { data: last } = await supabase
+      .from("workouts")
+      .select("title,structure")
+      .eq("status", "completed")
+      .eq("sport", "strength")
+      .order("workout_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(15)
+      .returns<Pick<Workout, "title" | "structure">[]>();
+    const found = (last ?? []).find((w) => (w.structure?.exercises?.length ?? 0) > 0);
+    if (!found) back("No finished lifting session to repeat yet.");
+    title = found!.title;
+    structure = found!.structure;
+  } else if (mode === "pick") {
+    const exercises = exercisesFromForm(formData);
+    if (!exercises.length) back("Pick at least one exercise, or start an empty workout.");
+    structure = buildStructure(null, exercises, null, null);
+  }
+
+  const { data: created, error } = await supabase
+    .from("workouts")
+    .insert({ user_id: userId, workout_date: today, sport: "strength", title, structure, generated: false, status: "planned" })
+    .select("id")
+    .single<{ id: string }>();
+  if (error || !created) back(error?.message ?? "Couldn't start the workout.");
+  refresh();
+  redirect(`/workouts/${created!.id}/start`);
 }
