@@ -93,3 +93,19 @@ describe("loggingStreak", () => {
     expect(loggingStreak([], "2026-11-25")).toEqual({ current: 0, longest: 0, todayDone: false });
   });
 });
+
+import { ringSegments } from "./food-stats";
+describe("ringSegments", () => {
+  it("is empty without macros", () => {
+    expect(ringSegments(null, 100)).toEqual([]);
+  });
+  it("lays arcs end to end in carbs, fat, protein order", () => {
+    const s = ringSegments({ p: 80, c: 5, f: 15 }, 200);
+    expect(s.map((x) => x.key)).toEqual(["carbs", "fat", "protein"]);
+    expect(s.map((x) => x.offset)).toEqual([-0, -10, -40]);
+    expect(s[2].dash).toBe("160 40");
+  });
+  it("skips zero-percent macros", () => {
+    expect(ringSegments({ p: 100, c: 0, f: 0 }, 100).map((x) => x.key)).toEqual(["protein"]);
+  });
+});

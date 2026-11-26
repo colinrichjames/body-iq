@@ -53,3 +53,26 @@ export function loggingStreak(finished: string[], today: string): { current: num
   }
   return { current: cur, longest, todayDone };
 }
+
+export type RingSegment = { key: "carbs" | "fat" | "protein"; pct: number; /** stroke-dasharray "dash gap" for a circle of this circumference. */ dash: string; /** stroke-dashoffset that starts the arc where the last one ended. */ offset: number };
+
+/**
+ * Donut segments for the macro split, in the order carbs, fat, protein, starting at 12 o'clock when the circle is
+ * rotated -90 degrees. Whole-percent arcs, so they always close the ring.
+ */
+export function ringSegments(split: { p: number; c: number; f: number } | null, circumference: number): RingSegment[] {
+  if (!split) return [];
+  let used = 0;
+  return ([
+    ["carbs", split.c],
+    ["fat", split.f],
+    ["protein", split.p],
+  ] as const)
+    .filter(([, pct]) => pct > 0)
+    .map(([key, pct]) => {
+      const len = (pct / 100) * circumference;
+      const seg: RingSegment = { key, pct, dash: `${len} ${circumference - len}`, offset: -used };
+      used += len;
+      return seg;
+    });
+}
