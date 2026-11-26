@@ -28,27 +28,43 @@ export async function GET(request: Request) {
     fiber_g: null,
   }));
 
-  let warning: string | null = null;
-  try {
-    const url =
-      "https://world.openfoodfacts.org/cgi/search.pl?" +
-      new URLSearchParams({
-        search_terms: q,
-        search_simple: "1",
-        action: "process",
-        json: "1",
-        page_size: "15",
-        fields: "code,product_name,product_name_en,brands,serving_size,serving_quantity,nutriments",
-      });
-    const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(8000), cache: "no-store" });
+  const FIELDS = "code,product_name,product_name_en,brands,serving_size,serving_quantity,nutriments";
+  type Product = Parameters<typeof foodFromOff>[0];
+  const get = async (url: string, ms: number) => {
+    const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(ms), cache: "no-store" });
     if (!res.ok) throw new Error(String(res.status));
-    const json = (await res.json()) as { products?: Parameters<typeof foodFromOff>[0][] };
-    for (const p of json.products ?? []) {
-      const f = foodFromOff(p);
-      if (f) foods.push(f);
+    return (await res.json()) as Record<string, unknown>;
+  };
+  // The newer search service is much faster and steadier; the classic CGI search is the fallback.
+  const sources: (() => Promise<Product[]>)[] = [
+    async () => {
+      const j = await get("https://search.openfoodfacts.org/search?" + new URLSearchParams({ q, page_size: "20", fields: FIELDS }), 5000);
+      if (!Array.isArray(j.hits)) throw new Error("shape");
+      return j.hits as Product[];
+    },
+    async () => {
+      const j = await get(
+        "https://world.openfoodfacts.org/cgi/search.pl?" + new URLSearchParams({ search_terms: q, search_simple: "1", action: "process", json: "1", page_size: "15", fields: FIELDS }),
+        6000,
+      );
+      if (!Array.isArray(j.products)) throw new Error("shape");
+      return j.products as Product[];
+    },
+  ];
+
+  let warning: string | null = "Open Food Facts search is busy. Your saved foods are shown; try again in a moment.";
+  for (const run of sources) {
+    try {
+      const products = await run();
+      for (const p of products) {
+        const f = foodFromOff(p);
+        if (f) foods.push(f);
+      }
+      warning = null;
+      break;
+    } catch {
+      // try the next source
     }
-  } catch {
-    warning = "Open Food Facts search is busy. Your saved foods are shown; try again in a moment.";
   }
   return Response.json({ foods: foods.slice(0, 20), warning });
 }
