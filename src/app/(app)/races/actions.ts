@@ -7,7 +7,7 @@ import { flash } from "@/lib/flash";
 import { toTrash, withUndo } from "@/lib/trash";
 import { addDays, isIsoDate } from "@/lib/dates";
 import { parseDuration } from "@/lib/hyrox";
-import { generatePlan, RACE_TYPES, type OtherRace } from "@/lib/plan";
+import { findDoubleBookings, generatePlan, RACE_TYPES, type OtherRace } from "@/lib/plan";
 import { prefsFromForm, sanitizePrefs } from "@/lib/plan-prefs";
 import { planSummary, type PlanResult } from "@/lib/plan-summary";
 import { affectsPlan, raceChanges, type RaceFields } from "@/lib/race-edit";
@@ -63,6 +63,10 @@ async function applyPlan(race: Race): Promise<PlanResult> {
   } catch (e) {
     fail(e instanceof Error ? e.message : "Could not generate a plan.");
   }
+
+  // Self-check: the generator keeps to one session a day (a triathlon brick aside). Never save a stacked plan unnoticed.
+  const stacked = findDoubleBookings(planned);
+  if (stacked.length) console.error("plan has double-booked days", race.id, stacked.slice(0, 5));
 
   const kept = planned.filter((w) => !taken.has(w.workout_date));
   const skippedDays = new Set(planned.filter((w) => taken.has(w.workout_date)).map((w) => w.workout_date)).size;
