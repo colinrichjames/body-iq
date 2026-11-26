@@ -12,6 +12,7 @@ import { getTimeZone, getToday } from "@/lib/today";
 import { dueReminders, hourIn } from "@/lib/reminders";
 import { computeReadiness, mergeCheckins } from "@/lib/readiness";
 import { loadDeload } from "@/lib/progression-data";
+import { loggingStreak } from "@/lib/food-stats";
 import { CoachCard } from "@/components/coach-card";
 import { loadCoach } from "@/lib/coach-data";
 import { DeloadNotice } from "@/components/deload-notice";
@@ -86,6 +87,8 @@ export default async function DashboardPage() {
   const readiness = computeReadiness(health);
   const deloadCheck = await loadDeload(supabase, today, health);
   const coach = await loadCoach(supabase, today, profileRes.data ?? null);
+  const { data: finishedRows } = await supabase.from("day_finishes").select("day").gte("day", addDays(today, -400)).returns<{ day: string }[]>();
+  const streak = loggingStreak((finishedRows ?? []).map((r) => r.day), today);
   const lastSync = syncRes.data?.[0] ?? null;
   const todayFuel = (nutritionRes.data ?? []).find((d) => d.day === today) ?? null;
   // The Today card already lists planned sessions, so only the nudges it doesn't cover are shown here.
@@ -237,6 +240,7 @@ export default async function DashboardPage() {
           {dayFuel.proteinG ? ` (${dayFuel.proteinG[0]}-${dayFuel.proteinG[1]} g)` : ""}. That is a performance range. If you&apos;re cutting, your own targets above take priority; use the day type to shift carbs up or down.
         </p>
         {dayFuel.note && <p className="mt-2 text-xs text-zinc-400">{dayFuel.note}</p>}
+        {streak.current > 0 && <p className="mt-2 text-xs text-zinc-400">Logging streak: {streak.current} day{streak.current === 1 ? "" : "s"}{streak.todayDone ? "" : ". Finish today to extend it"}.</p>}
       </section>
 
       <CoachCard coach={coach} today={today} from="/dashboard" />
