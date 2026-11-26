@@ -20,6 +20,8 @@ import { insightsText, sessionInsights } from "@/lib/session-insights";
 import type { BlockLog, SetLog, Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
 import { dbError } from "@/lib/db-error";
+import { loadHistory } from "@/lib/progression-data";
+import { suggestNext } from "@/lib/progression";
 import { copyRow } from "@/lib/workout-copy";
 import { adaptationOffer, trimmed, type AW } from "@/lib/missed-offer";
 
@@ -645,4 +647,52 @@ export async function startQuickWorkout(formData: FormData) {
   if (error || !created) back(error?.message ?? "Couldn't start the workout.");
   refresh();
   redirect(`/workouts/${created!.id}/start`);
+}
+
+/**
+ * Adds an exercise to a session that is being played (the empty-workout case). Saved on the workout so a refresh
+ * keeps it, and returns what the player needs to prefill: last time's sets and a history-based weight suggestion.
+ */
+export async function addPlayerExercise(
+  id: string,
+  nameRaw: string,
+  sets = 3,
+  reps = 10,
+): Promise<{ error: string | null; lastWeight?: number; lastTime?: string; suggested?: { weight: number; text: string } }> {
+  const { supabase } = await requireUser();
+  const name = nameRaw.trim().slice(0, 80);
+  if (!name) return { error: "Type or pick an exercise." };
+  const nSets = Number.isFinite(sets) && sets >= 1 && sets <= 20 ? Math.round(sets) : 3;
+  const nReps = Number.isFinite(reps) && reps >= 1 && reps <= 100 ? Math.round(reps) : 10;
+  const { data: w } = await supabase.from("workouts").select("structure,workout_date").eq("id", id).maybeSingle<{ structure: WorkoutStructure | null; workout_date: string }>();
+  if (!w) return { error: "Couldn't find that workout." };
+  const list = w.structure?.exercises ?? [];
+  if (!list.some((e) => e.name.toLowerCase() === name.toLowerCase())) {
+    const { error } = await supabase
+      .from("workouts")
+      .update({ structure: { ...(w.structure ?? {}), exercises: [...list, { name, sets: nSets, reps: nReps }] } })
+      .eq("id", id);
+    if (error) return { error: dbError(error) };
+  }
+  // What happened last time, and a suggested weight, the same way the planned player does it.
+  const { data: rows } = await supabase
+    .from("workout_sets")
+    .select("weight_lb, reps, workout_id, set_number, created_at, skipped")
+    .eq("exercise", name)
+    .neq("workout_id", id)
+    .order("created_at", { ascending: false })
+    .limit(60);
+  const done = (rows ?? []).filter((r) => !r.skipped);
+  const lastId = done[0]?.workout_id;
+  const lastSets = done.filter((r) => r.workout_id === lastId).sort((a, b) => a.set_number - b.set_number);
+  const lastWeight = done.find((r) => r.weight_lb !== null)?.weight_lb;
+  const lastTime = lastSets.map((r) => `${r.weight_lb !== null ? `${Number(r.weight_lb)} × ` : ""}${r.reps ?? "-"}`).join(", ");
+  const hist = await loadHistory(supabase, w.workout_date, { names: [name], excludeId: id });
+  const sug = suggestNext(name, hist[name] ?? [], nReps);
+  return {
+    error: null,
+    ...(lastWeight !== undefined && lastWeight !== null ? { lastWeight: Number(lastWeight) } : {}),
+    ...(lastTime ? { lastTime } : {}),
+    ...(sug ? { suggested: { weight: sug.weight, text: `${sug.weight} lb: ${sug.reason}` } } : {}),
+  };
 }

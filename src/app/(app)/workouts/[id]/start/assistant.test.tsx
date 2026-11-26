@@ -5,7 +5,8 @@ import type { Workout } from "@/lib/types";
 
 const saveProgress = vi.fn(async () => ({ error: null }));
 const finishWorkout = vi.fn(async () => ({ error: null }));
-vi.mock("../../actions", () => ({ saveProgress: (...a: unknown[]) => saveProgress(...(a as [])), finishWorkout: (...a: unknown[]) => finishWorkout(...(a as [])) }));
+const addPlayerExercise = vi.fn(async (...args: unknown[]) => ({ args, error: null as string | null, lastWeight: 120, suggested: { weight: 125, text: "125 lb: up" } }));
+vi.mock("../../actions", () => ({ addPlayerExercise: (...a: unknown[]) => addPlayerExercise(...(a as [string, string])), saveProgress: (...a: unknown[]) => saveProgress(...(a as [])), finishWorkout: (...a: unknown[]) => finishWorkout(...(a as [])) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
 import { Assistant } from "./assistant";
@@ -38,6 +39,7 @@ beforeEach(() => {
   localStorage.clear();
   saveProgress.mockClear();
   finishWorkout.mockClear();
+  addPlayerExercise.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -306,5 +308,43 @@ describe("endurance finish", () => {
     click(/skip exercise/i);
     expect(screen.getByText(/total volume 800 lb/i)).toBeTruthy();
     expect(screen.getByText(/\+100 lb vs last time/)).toBeTruthy();
+  });
+});
+
+describe("empty workout", () => {
+  const empty = { id: "w9", sport: "strength", title: "Evening Workout", description: null, status: "planned", structure: null } as unknown as Workout;
+
+  it("adds an exercise from search, logs sets with the suggested weight, and finishes with them", async () => {
+    mount(empty, { recent: ["Back Squat"] });
+    click(/add exercise/i);
+    fireEvent.change(screen.getByLabelText(/search exercises/i), { target: { value: "back" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Back Squat" }));
+    });
+    expect(addPlayerExercise).toHaveBeenCalledWith("w9", "Back Squat", 3, 10);
+    expect(screen.getByText(/set 1 of 3/i)).toBeTruthy();
+    expect((screen.getByLabelText(/weight/i) as HTMLInputElement).value).toBe("125");
+    click(/done set/i);
+    click(/skip rest/i);
+    click(/done set/i);
+    click(/skip rest/i);
+    click(/finish/i);
+    expect(screen.getByText(/3 sets logged|2 sets logged/i)).toBeTruthy();
+  });
+
+  it("won't add the same exercise twice", async () => {
+    mount(empty);
+    for (let i = 0; i < 2; i++) {
+      click(/add exercise/i);
+      fireEvent.change(screen.getByLabelText(/search exercises/i), { target: { value: "Cable fly" } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /Add .Cable fly/ }));
+      });
+      if (i === 0) {
+        click(/add exercise/i);
+        fireEvent.click(screen.getByRole("button", { name: /back to workout/i }));
+      }
+    }
+    expect(addPlayerExercise).toHaveBeenCalledTimes(1);
   });
 });
