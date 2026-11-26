@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncFoodDay } from "./food-sync";
 
-export type TrashKind = "workout" | "scan" | "race" | "benchmark" | "food_entry";
+export type TrashKind = "workout" | "scan" | "race" | "benchmark" | "food_entry" | "plan_sessions";
 
 const KEEP_DAYS = 7;
 
@@ -52,6 +52,13 @@ export async function restoreFromTrash(supabase: SupabaseClient, userId: string,
       err = await insert("races", p.race as Record<string, unknown>);
       if (!err) err = await insert("workouts", p.workouts as Rows);
       to = "/races";
+      break;
+    }
+    case "plan_sessions": {
+      // Sessions a plan rebuild removed. Rows that are already back (same id) are skipped, not an error.
+      const have = new Set(((await supabase.from("workouts").select("id").in("id", ((p.workouts as { id: string }[]) ?? []).map((w) => w.id))).data ?? []).map((r) => r.id as string));
+      err = await insert("workouts", ((p.workouts as Rows) ?? []).filter((w) => !have.has(String(w.id))));
+      to = String(p.back ?? "/workouts");
       break;
     }
     case "benchmark": {

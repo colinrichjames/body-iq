@@ -18,7 +18,7 @@ export function UndoBanner() {
   const dismiss = rest.toString() ? `${path}?${rest}` : path;
   return (
     <div role="status" className="mx-auto mt-3 flex w-full max-w-md items-center justify-between gap-3 rounded-xl border border-amber-700/50 bg-amber-950/30 px-4 py-2.5 text-sm text-amber-200">
-      <span className="min-w-0 truncate">Deleted &ldquo;{label}&rdquo;.</span>
+      <span className="min-w-0 truncate">{label === "Plan sessions" ? "Plan sessions were removed." : <>Deleted &ldquo;{label}&rdquo;.</>}</span>
       <span className="flex shrink-0 items-center gap-3">
         <form action={undoDelete}>
           <input type="hidden" name="id" value={id} />
