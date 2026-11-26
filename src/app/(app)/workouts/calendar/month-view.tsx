@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/components/toast";
 import { useCallback, useState } from "react";
 import { formatDay } from "@/lib/dates";
+import { findDoubleBookings } from "@/lib/plan";
 import { SPORT_DOT } from "@/lib/sport";
 import { useDragMove } from "@/components/use-drag-move";
 import { StatusBadge } from "@/components/status-badge";
@@ -12,7 +13,7 @@ import { MoveControl } from "@/components/move-control";
 import { card } from "@/components/ui";
 import { rescheduleWorkout } from "../actions";
 
-export type CalWorkout = { id: string; date: string; title: string; sport: string; status: string; minutes: number | null };
+export type CalWorkout = { id: string; date: string; title: string; sport: string; status: string; minutes: number | null; plan?: string | null };
 
 export function MonthView({
   ym,
@@ -61,6 +62,8 @@ export function MonthView({
   const byDay = new Map<string, CalWorkout[]>();
   for (const w of items) byDay.set(w.date, [...(byDay.get(w.date) ?? []), w]);
   const selected = sel ? (byDay.get(sel) ?? []) : [];
+  // Days with more than one live session (skipped ones don't count; a deliberate brick doesn't either).
+  const doubled = new Set(findDoubleBookings(items.filter((w) => w.status !== "skipped").map((w) => ({ workout_date: w.date, title: w.title }))));
 
   return (
     <>
@@ -89,6 +92,7 @@ export function MonthView({
                 ))}
               </span>
               {raceDays[c] && <span className="mt-0.5 text-[10px] leading-none text-amber-400">race</span>}
+              {doubled.has(c) && <span className="mt-0.5 text-[10px] leading-none text-amber-300" title="More than one session">x2</span>}
             </Link>
           );
         })}
@@ -98,6 +102,11 @@ export function MonthView({
         <section className={`${card} mt-5`}>
           <h2 className="text-sm text-zinc-400">{formatDay(sel, { weekday: true })}</h2>
           {raceDays[sel] && <p className="mt-1 text-sm text-amber-400">Race day: {raceDays[sel]}</p>}
+          {doubled.has(sel) && (
+            <p className="mt-1 text-sm text-amber-300">
+              {selected.filter((w) => w.status !== "skipped").length} sessions on this day. Move one if that is too much.
+            </p>
+          )}
           {selected.length === 0 ? (
             <p className="mt-2 text-sm text-zinc-500">Nothing planned.</p>
           ) : (
@@ -112,6 +121,7 @@ export function MonthView({
                       <span className="flex min-w-0 items-center gap-2">
                         <span className={`h-2 w-2 shrink-0 rounded-full ${SPORT_DOT[w.sport] ?? "bg-zinc-500"}`} />
                         <span className="truncate">{w.title}</span>
+                        <span title={w.plan ?? "Added by you"} className="shrink-0 rounded-full border border-zinc-700 px-1.5 text-[10px] text-zinc-400">{w.plan ? "Plan" : "Yours"}</span>
                       </span>
                       <StatusBadge status={w.status} overdue={sel < today} />
                     </Link>

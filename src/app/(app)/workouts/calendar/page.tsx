@@ -33,6 +33,10 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     supabase.from("workouts").select("*").gte("workout_date", gridStart).lte("workout_date", gridEnd).order("workout_date").order("created_at").returns<Workout[]>(),
     supabase.from("races").select("*").gte("race_date", gridStart).lte("race_date", gridEnd).returns<Race[]>(),
   ]);
+  // Names of the races behind race-plan sessions, so the day view can say which sessions came from a plan.
+  const planIds = [...new Set((wRes.data ?? []).map((w) => w.race_id).filter((x): x is string => !!x))];
+  const planRaces = planIds.length ? ((await supabase.from("races").select("id,name").in("id", planIds)).data ?? []) : [];
+  const planName = new Map<string, string>(planRaces.map((r: { id: string; name: string }) => [r.id, r.name]));
   const raceDays = new Map((rRes.data ?? []).map((r) => [r.race_date, r.name]));
 
   const inMonth = (wRes.data ?? []).filter((w) => w.workout_date.startsWith(ym));
@@ -73,7 +77,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         today={today}
         sel={sel}
         cells={cells}
-        workouts={(wRes.data ?? []).map((w) => ({ id: w.id, date: w.workout_date, title: w.title, sport: w.sport, status: w.status, minutes: w.planned_duration_min }))}
+        workouts={(wRes.data ?? []).map((w) => ({ id: w.id, date: w.workout_date, title: w.title, sport: w.sport, status: w.status, minutes: w.planned_duration_min, plan: w.race_id ? (planName.get(w.race_id) ?? "Race plan") : null }))}
         raceDays={Object.fromEntries(raceDays)}
       />
 
