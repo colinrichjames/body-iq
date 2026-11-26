@@ -1,7 +1,7 @@
 "use client";
 
 import { useToast } from "@/components/toast";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { btnGhost, btnPrimary, card, field } from "@/components/ui";
 import { isBarcode, scaleFood, type Food } from "@/lib/food";
@@ -42,7 +42,9 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
   const [scanning, setScanning] = useState(false);
   const [picked, setPicked] = useState<Food | null>(null);
   const [servings, setServings] = useState("1");
-  const [manual, setManual] = useState<{ barcode: string | null } | null>(null);
+  const [manual, setManual] = useState<{ barcode: string | null; name?: string } | null>(null);
+  const [emptyFor, setEmptyFor] = useState<string | null>(null);
+  const latest = useRef(0);
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<Tab>("search");
   const [selected, setSelected] = useState<Record<string, MealItem>>({});
@@ -126,22 +128,47 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
     void lookup(code);
   }, []);
 
-  async function search() {
+  /** Runs one search. Only the newest call may touch the screen, so a slow earlier answer never overwrites a later one. */
+  async function search(explicit = true) {
     const term = q.trim();
-    if (isBarcode(term)) return lookup(term);
+    if (isBarcode(term)) return explicit ? lookup(term) : undefined;
     if (term.length < 2) return;
+    const mine = ++latest.current;
     setBusy(true);
     setNote(null);
     try {
       const res = await fetch(`/api/food/search?q=${encodeURIComponent(term)}`);
       const j = (await res.json()) as { foods?: Food[]; warning?: string | null };
+      if (mine !== latest.current) return;
       setResults(j.foods ?? []);
-      setNote(j.warning ?? ((j.foods ?? []).length === 0 ? "Nothing found. Try another word, scan it, or add it by hand." : null));
+      setNote(j.warning ?? null);
+      setEmptyFor(!(j.foods ?? []).length && !j.warning ? term : null);
     } catch {
+      if (mine !== latest.current) return;
       setNote("No connection. Try again.");
     }
-    setBusy(false);
+    if (mine === latest.current) setBusy(false);
   }
+
+  function onType(value: string) {
+    setQ(value);
+    if (value.trim().length < 2) {
+      latest.current++; // drop any search still in flight
+      setBusy(false);
+      setResults([]);
+      setEmptyFor(null);
+      setNote(null);
+    }
+  }
+
+  // Live search: wait for a short pause in typing, then search. Enter and the Search button still work straight away.
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2 || isBarcode(term)) return;
+    const t = setTimeout(() => void search(false), 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   async function submitPicked() {
     if (!picked) return;
@@ -231,7 +258,7 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
           <div className="mt-3 flex gap-2">
             <input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => onType(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), void search())}
               aria-label="Search a food or type a barcode"
               placeholder="Search a food or type a barcode"
@@ -254,6 +281,15 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
       )}
 
       {note && !picked && <p className="mt-3 text-sm text-amber-300">{note}</p>}
+      {emptyFor && !picked && !manual && tab === "search" && !busy && (
+        <div className="mt-3 rounded-xl border border-zinc-800 px-3 py-3 text-sm">
+          <p className="text-zinc-300">No foods found for &ldquo;{emptyFor}&rdquo;.</p>
+          <p className="mt-1 text-zinc-500">Try another word or scan the barcode.</p>
+          <button type="button" onClick={() => setManual({ barcode: null, name: emptyFor })} className="mt-2 text-emerald-400 underline">
+            Add &ldquo;{emptyFor}&rdquo; by hand
+          </button>
+        </div>
+      )}
 
       {!picked && !manual && tab === "search" && results.length > 0 && (
         <ul className="mt-3 divide-y divide-zinc-800">
@@ -388,7 +424,7 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
           className="mt-4 space-y-3"
         >
           {manual.barcode && <p className="text-xs text-zinc-500">Barcode {manual.barcode}</p>}
-          <Field label="Food name"><input name="name" required className={field} /></Field>
+          <Field label="Food name"><input name="name" required defaultValue={manual.name ?? ""} className={field} /></Field>
           <Field label="Brand (optional)"><input name="brand" className={field} /></Field>
           <Field label="Serving size"><input name="serving_label" placeholder="e.g. 1 bar or 40 g" className={field} /></Field>
           <p className="text-xs text-zinc-500">Nutrition per one serving:</p>

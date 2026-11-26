@@ -80,4 +80,47 @@ describe("FoodAdder tabs", () => {
     expect(actions.addFoodEntry.mock.calls[0][0]).toMatchObject({ name: "Test banana", calories: 105 });
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });
+
+  describe("live search", () => {
+    const fetchMock = vi.fn();
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      fetchMock.mockReset();
+      vi.stubGlobal("fetch", fetchMock);
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    });
+    const type = (v: string) => fireEvent.change(screen.getByLabelText("Search a food or type a barcode"), { target: { value: v } });
+
+    it("searches while typing, without pressing Enter, after a short pause", async () => {
+      fetchMock.mockResolvedValue({ json: async () => ({ foods: [{ source: "off", barcode: null, name: "Rolled oats", brand: null, servingLabel: "100 g", calories: 379, protein_g: 13, carbs_g: 67, fat_g: 6, sodium_mg: null, sugar_g: null, fiber_g: null }], warning: null }) });
+      mount();
+      type("oats");
+      expect(fetchMock).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(400);
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      expect(String(fetchMock.mock.calls[0][0])).toContain("q=oats");
+      expect(await screen.findByText("Rolled oats")).toBeTruthy();
+    });
+
+    it("runs one search for a burst of typing", async () => {
+      fetchMock.mockResolvedValue({ json: async () => ({ foods: [], warning: null }) });
+      mount();
+      for (const v of ["oa", "oat", "oats"]) type(v);
+      await vi.advanceTimersByTimeAsync(400);
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    });
+
+    it("shows a no-results state with an add-by-hand link that prefills the name", async () => {
+      fetchMock.mockResolvedValue({ json: async () => ({ foods: [], warning: null }) });
+      mount();
+      type("zzzzqq");
+      await vi.advanceTimersByTimeAsync(400);
+      expect(await screen.findByText(/No foods found for/)).toBeTruthy();
+      fireEvent.click(screen.getByRole("button", { name: /Add .zzzzqq. by hand/ }));
+      expect((screen.getByLabelText("Food name") as HTMLInputElement).value).toBe("zzzzqq");
+    });
+  });
 });

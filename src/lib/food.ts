@@ -16,6 +16,8 @@ export type Food = {
   sodium_mg: number | null;
   sugar_g: number | null;
   fiber_g: number | null;
+  /** Grams in one serving, when known (Open Food Facts items). Lets the macro checks work per 100 g. */
+  grams?: number;
 };
 
 type Nutriments = Record<string, unknown>;
@@ -80,6 +82,7 @@ export function foodFromOff(p: OffProduct): Food | null {
     name: name.slice(0, 160),
     brand: firstBrand(p.brands),
     servingLabel: label,
+    grams,
     calories: r1(kcal100 * f),
     protein_g: r1(per("proteins") ?? 0),
     carbs_g: r1(per("carbohydrates") ?? 0),
@@ -104,3 +107,43 @@ export function scaleFood(food: Food, servings: number) {
 }
 
 export const isBarcode = (s: string) => /^\d{6,14}$/.test(s);
+
+/** Plausible protein per 100 g for common foods, as dry/raw/as sold. A listing far outside is almost certainly a data error. */
+const PROTEIN_PER_100G: { match: RegExp; min: number; max: number }[] = [
+  { match: /\boat(s|meal)?\b/i, min: 8, max: 18 },
+  { match: /\b(white|brown|basmati|jasmine) rice\b|\brice\b/i, min: 5, max: 9 },
+  { match: /\bpasta|spaghetti|macaroni\b/i, min: 8, max: 15 },
+  { match: /\bchicken breast\b/i, min: 18, max: 34 },
+  { match: /\begg(s)?\b/i, min: 10, max: 14 },
+  { match: /\bbanana(s)?\b/i, min: 0, max: 2.5 },
+  { match: /\bapple(s)?\b/i, min: 0, max: 1.5 },
+];
+
+/**
+ * Checks a food's numbers against each other. Calories should roughly equal 4 x protein + 4 x carbs + 9 x fat, a serving
+ * can't hold more than its own weight in macros or 900 kcal per 100 g, and protein per 100 g should fit the food.
+ * Returns the problem, or null when the entry looks fine. Missing macros with calories listed count as a problem.
+ */
+export function foodProblem(f: Pick<Food, "name" | "calories" | "protein_g" | "carbs_g" | "fat_g" | "grams">): string | null {
+  const expected = 4 * f.protein_g + 4 * f.carbs_g + 9 * f.fat_g;
+  if (f.calories > 30 && expected === 0) return "Calories listed but no macros.";
+  if (expected > 0 || f.calories > 0) {
+    const tolerance = Math.max(40, 0.35 * Math.max(f.calories, expected));
+    if (Math.abs(f.calories - expected) > tolerance) return "Calories don't match the macros.";
+  }
+  if (f.grams && f.grams > 0) {
+    if (f.calories / f.grams > 9.2) return "More than 900 kcal per 100 g.";
+    if (f.protein_g + f.carbs_g + f.fat_g > f.grams * 1.05) return "More macros than the serving weighs.";
+    const group = PROTEIN_PER_100G.find((g) => g.match.test(f.name));
+    if (group) {
+      const p100 = (f.protein_g / f.grams) * 100;
+      if (p100 < group.min * 0.7 || p100 > group.max * 1.15) return "Protein is outside the normal range for this food.";
+    }
+  }
+  return null;
+}
+
+/** Drops Open Food Facts entries that fail the checks. Entries the user saved themselves are never removed. */
+export function cleanResults(foods: Food[]): Food[] {
+  return foods.filter((f) => f.source === "custom" || foodProblem(f) === null);
+}

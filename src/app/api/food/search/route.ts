@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { foodFromOff, type Food } from "@/lib/food";
+import { cleanResults, foodFromOff, type Food } from "@/lib/food";
 
 export const dynamic = "force-dynamic";
 
@@ -66,5 +66,5 @@ export async function GET(request: Request) {
       // try the next source
     }
   }
-  return Response.json({ foods: foods.slice(0, 20), warning });
+  return Response.json({ foods: cleanResults(foods).slice(0, 20), warning });
 }
