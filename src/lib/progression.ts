@@ -3,7 +3,7 @@ import { est1RM } from "./lifting";
 
 export type HistSet = { weight: number; reps: number; rpe: number | null };
 /** One finished session of one exercise: its working sets (skipped and unweighted sets removed). */
-export type HistSession = { date: string; sets: HistSet[] };
+export type HistSession = { date: string; sets: HistSet[]; /** Prescribed sets that were skipped that day. */ skipped?: number };
 
 export type Suggestion = {
   exercise: string;
@@ -68,6 +68,8 @@ export function suggestNext(exercise: string, sessions: HistSession[], targetRep
   if (opts.deload) return make(toStep(W * 0.9, step) || W, "deload", "Deload week: about 10% lighter than usual, same reps, nothing to failure.");
 
   const hit = w.sets.every((s) => s.reps >= targetReps);
+  const skipped = last.skipped ?? 0;
+  if (skipped > 0) return make(W, "hold", `${last.sets.length} of ${last.sets.length + skipped} sets completed last time. Repeat ${W} lb and finish every set before going up.`);
   const avgMiss = mean(w.sets.map((s) => Math.max(0, targetReps - s.reps)));
   const grinding = rpes.length > 0 && Math.max(...rpes) >= 9.5;
   const detail = `${w.sets.map((s) => s.reps).join(", ")} reps${rpes.length ? ` at RPE ${Math.max(...rpes)}` : ""}`;

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { deloadCheck, loadStep, setE1RM, suggestNext, working, type HistSession } from "./progression";
 import { groupHistory } from "./progression-data";
+import { suggestNext as suggestNextCheck } from "./progression";
 
 const sess = (date: string, weight: number, reps: number[], rpe: number | null = null): HistSession => ({ date, sets: reps.map((r) => ({ weight, reps: r, rpe })) });
 
@@ -105,5 +106,19 @@ describe("helpers", () => {
     expect(g.Bench.map((s) => s.date)).toEqual(["2026-11-17", "2026-11-10"]);
     expect(g.Bench[0].sets).toEqual([{ weight: 105, reps: 6, rpe: null }]);
     expect(g.Bench[1].sets[0].rpe).toBe(8);
+  });
+});
+
+describe("history with skipped sets", () => {
+  const row = (reps: number | null, skipped: boolean) => ({ exercise: "Back squat", weight_lb: 120, reps, rpe: null, skipped, workouts: { workout_date: "2026-11-20" } });
+  it("holds the weight when sets were skipped last time, even if the done sets hit the target", () => {
+    const hist = groupHistory([row(10, false), row(null, true), row(null, true)]);
+    const sug = suggestNextCheck("Back squat", hist["Back squat"], 10);
+    expect(sug).toMatchObject({ action: "hold", weight: 120 });
+    expect(sug?.reason).toMatch(/1 of 3 sets completed/);
+  });
+  it("goes up when every set was done", () => {
+    const hist = groupHistory([row(10, false), row(10, false), row(10, false)]);
+    expect(suggestNextCheck("Back squat", hist["Back squat"], 10)).toMatchObject({ action: "up", weight: 130 });
   });
 });

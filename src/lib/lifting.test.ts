@@ -63,3 +63,20 @@ describe("nextWeights", () => {
     expect(nextWeights([s("Press", 95, 5)], {})).toEqual([]);
   });
 });
+
+describe("nextWeights with skipped sets", () => {
+  const sq = (reps: number | null, skipped = false) => s("Back squat", reps === null ? 120 : 120, reps, null, skipped);
+  it("1 of 3 sets done and 2 skipped repeats the weight with an honest reason", () => {
+    const [n] = nextWeights([sq(10), sq(null, true), sq(null, true)], { "Back squat": 10 });
+    expect(n).toMatchObject({ action: "same", from: 120, to: 120, incomplete: true });
+    expect(n.reason).toMatch(/1 of 3 sets completed/);
+  });
+  it("sets never logged count against it too", () => {
+    const [n] = nextWeights([sq(10)], { "Back squat": 10 }, { "Back squat": 3 });
+    expect(n).toMatchObject({ action: "same", incomplete: true });
+  });
+  it("all sets at target reps still goes up", () => {
+    const [n] = nextWeights([sq(10), sq(10), sq(10)], { "Back squat": 10 }, { "Back squat": 3 });
+    expect(n).toMatchObject({ action: "up", from: 120, to: 130 });
+  });
+});

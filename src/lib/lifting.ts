@@ -62,7 +62,7 @@ export function detectPRs(prior: Row[], current: Row[]): PR[] {
 export const prText = (p: PR) =>
   p.kind === "weight" ? `${p.exercise}: ${p.value} lb for ${p.reps} (was ${p.previous} lb)` : `${p.exercise}: ${p.weight} lb x ${p.reps}, est. 1RM ${p.value} lb (was ${p.previous})`;
 
-export type NextWeight = { exercise: string; from: number; to: number; action: "up" | "same" | "down"; reason: string };
+export type NextWeight = { exercise: string; from: number; to: number; action: "up" | "same" | "down"; reason: string; /** Some prescribed sets were skipped or never logged, so the weight must not go up. */ incomplete?: boolean };
 
 const LOWER = /squat|deadlift|leg press|hip thrust|lunge|rdl|romanian/i;
 const round = (n: number, step: number) => Math.round(n / step) * step;
@@ -72,7 +72,7 @@ const round = (n: number, step: number) => Math.round(n / step) * step;
  * top weight without grinding (RPE 8.5 or less): go up. Missed by a lot: go down. Otherwise repeat.
  * (A fuller progression engine across sessions comes later; this is the simple rule.)
  */
-export function nextWeights(logs: SetLog[], targets: Record<string, number | undefined>): NextWeight[] {
+export function nextWeights(logs: SetLog[], targets: Record<string, number | undefined>, plannedSets: Record<string, number | undefined> = {}): NextWeight[] {
   const names = [...new Set(logs.map((l) => l.exercise))];
   const out: NextWeight[] = [];
   for (const exercise of names) {
@@ -87,6 +87,12 @@ export function nextWeights(logs: SetLog[], targets: Record<string, number | und
     const grinding = rpes.length > 0 && Math.max(...rpes) > 8.5;
     const dumb = isDumbbell(exercise);
     const step = dumb ? (top < 30 ? 2.5 : 5) : LOWER.test(exercise) ? 10 : 5;
+    // Progress only when every prescribed set was done. Skipped sets and sets never logged count as not done.
+    const total = Math.max(logs.filter((l) => l.exercise === exercise).length, plannedSets[exercise] ?? 0);
+    if (sets.length < total) {
+      out.push({ exercise, from: top, to: top, action: "same", incomplete: true, reason: `${sets.length} of ${total} sets completed. Repeat ${top} lb and finish every set at ${target} reps before going up.` });
+      continue;
+    }
     if (hit && !grinding) out.push({ exercise, from: top, to: top + step, action: "up", reason: `Hit ${target} reps on every set${rpes.length ? ` at RPE ${Math.max(...rpes)} or easier` : ""}.` });
     else if (hit) out.push({ exercise, from: top, to: top, action: "same", reason: "Hit the reps but it was a grind. Own this weight first." });
     else if (avgMiss >= 2) out.push({ exercise, from: top, to: Math.max(0, round(top * 0.925, dumb ? 2.5 : 5)), action: "down", reason: `Missed ${target} reps by ${Math.round(avgMiss)} or more on average. Drop a little and rebuild.` });
