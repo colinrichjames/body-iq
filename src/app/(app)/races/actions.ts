@@ -5,11 +5,11 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { flash } from "@/lib/flash";
 import { toTrash, withUndo } from "@/lib/trash";
-import { addDays, isIsoDate } from "@/lib/dates";
+import { addDays, formatDay, isIsoDate } from "@/lib/dates";
 import { parseDuration } from "@/lib/hyrox";
 import { findDoubleBookings, generatePlan, RACE_TYPES, type OtherRace } from "@/lib/plan";
 import { prefsFromForm, sanitizePrefs } from "@/lib/plan-prefs";
-import { planSummary, type PlanResult } from "@/lib/plan-summary";
+import { comparePlans, planSummary, type PlanResult } from "@/lib/plan-summary";
 import { affectsPlan, raceChanges, type RaceFields } from "@/lib/race-edit";
 import { getToday } from "@/lib/today";
 import type { Race, RaceType } from "@/lib/types";
@@ -19,29 +19,33 @@ function fail(message: string): never {
   redirect(`/races?error=${encodeURIComponent(message)}`);
 }
 
-/** Replaces this race's not-yet-done generated workouts from today on with a fresh plan. */
+/**
+ * Replaces this race's not-yet-done generated workouts from today on with a fresh plan. The new plan is built first;
+ * only then are the old sessions taken out, copied to the trash so Undo can put them back. If anything fails after
+ * that, the old sessions are restored on the spot, so a rebuild never leaves a plan with holes.
+ */
 async function applyPlan(race: Race): Promise<PlanResult> {
   const { supabase, userId } = await requireUser();
   const today = await getToday();
   if (race.race_date < today) fail("That race date has already passed.");
 
-  const { data: removedRows, error: delError } = await supabase
+  const { data: old } = await supabase
     .from("workouts")
-    .delete()
+    .select("*")
     .eq("race_id", race.id)
     .eq("generated", true)
     .eq("status", "planned")
-    .gte("workout_date", today)
-    .select("id");
-  if (delError) fail(dbError(delError, true));
+    .gte("workout_date", today);
+  const oldRows = old ?? [];
+  const oldIds = new Set(oldRows.map((w) => w.id as string));
 
   // Don't pile onto days where the user already has something (their own sessions or another plan).
   const { data: existing } = await supabase
     .from("workouts")
-    .select("workout_date")
+    .select("id,workout_date")
     .gte("workout_date", today)
     .lte("workout_date", race.race_date);
-  const taken = new Set((existing ?? []).map((w) => w.workout_date as string));
+  const taken = new Set((existing ?? []).filter((w) => !oldIds.has(w.id as string)).map((w) => w.workout_date as string));
 
   const [{ data: prof }, { data: others }] = await Promise.all([
     supabase.from("profiles").select("training_prefs").eq("id", userId).maybeSingle<{ training_prefs: unknown }>(),
@@ -49,6 +53,7 @@ async function applyPlan(race: Race): Promise<PlanResult> {
   ]);
   const otherRaces: OtherRace[] = (others ?? []).map((o) => ({ name: o.name, date: o.race_date, priority: o.priority }));
 
+  // Build the plan before touching anything. A failure here leaves the existing plan exactly as it was.
   let planned;
   try {
     planned = generatePlan({
@@ -70,16 +75,31 @@ async function applyPlan(race: Race): Promise<PlanResult> {
 
   const kept = planned.filter((w) => !taken.has(w.workout_date));
   const skippedDays = new Set(planned.filter((w) => taken.has(w.workout_date)).map((w) => w.workout_date)).size;
-  const rows = kept
-    .map((w) => ({ ...w, user_id: userId, race_id: race.id, generated: true, status: "planned" }));
+  const rows = kept.map((w) => ({ ...w, user_id: userId, race_id: race.id, generated: true, status: "planned" }));
 
+  // Keep a copy of what is about to go, then swap.
+  const undo = oldRows.length ? await toTrash(supabase, userId, "plan_sessions", `${race.name}: ${oldRows.length} planned sessions`, { workouts: oldRows, back: "/workouts" }) : null;
+  if (oldRows.length) {
+    const { error: delError } = await supabase.from("workouts").delete().in("id", [...oldIds]);
+    if (delError) fail(dbError(delError, true));
+  }
   for (let i = 0; i < rows.length; i += 200) {
     const { error } = await supabase.from("workouts").insert(rows.slice(i, i + 200));
-    if (error) fail(dbError(error, true));
+    if (error) {
+      // Put everything back the way it was before reporting the failure.
+      await supabase.from("workouts").delete().eq("race_id", race.id).eq("generated", true).eq("status", "planned").gte("workout_date", today);
+      if (oldRows.length) await supabase.from("workouts").insert(oldRows);
+      fail(`${dbError(error, true)} Your existing plan was left as it was.`);
+    }
   }
+  const diff = comparePlans(
+    oldRows.map((w) => ({ date: w.workout_date as string, title: w.title as string })),
+    rows.map((w) => ({ date: w.workout_date, title: w.title })),
+  );
+  if (diff.dropped.length) console.warn("plan rebuild removed sessions", race.id, diff.dropped.slice(0, 20));
   const dates = rows.map((r) => r.workout_date).sort();
   const weeks = new Set(rows.map((r) => addDays(r.workout_date, -((new Date(r.workout_date + "T00:00:00Z").getUTCDay() + 6) % 7)))).size;
-  return { removed: removedRows?.length ?? 0, added: rows.length, skippedDays, first: dates[0] ?? null, last: dates.at(-1) ?? null, weeks };
+  return { removed: oldRows.length, added: rows.length, fresh: diff.added, moved: diff.moved, dropped: diff.dropped, undo: diff.dropped.length || diff.moved ? undo : null, skippedDays, first: dates[0] ?? null, last: dates.at(-1) ?? null, weeks };
 }
 
 /** Reads and validates the race form. Shared by add and edit. Failures go back to `back` with a message. */
@@ -143,26 +163,28 @@ export async function updateRace(formData: FormData) {
 
   const today = await getToday();
   const lines = [`Saved. ${changes.map((c) => c.text).join("; ")}.`];
+  let undo: string | null = null;
   if (affectsPlan(changes)) {
     if (after.race_date < today) {
       lines.push("The race date is in the past, so the plan was not rebuilt.");
     } else if (formData.get("rebuild") === "on") {
-      lines.push(planSummary(await applyPlan(after), "rebuilt"));
+      const result = await applyPlan(after);
+      undo = result.undo ?? null;
+      lines.push(planSummary(result, "rebuilt"));
     } else {
-      const { data: gone } = await supabase
-        .from("workouts")
-        .delete()
-        .eq("race_id", id)
-        .eq("generated", true)
-        .eq("status", "planned")
-        .gt("workout_date", after.race_date)
-        .select("id");
-      const n = gone?.length ?? 0;
-      lines.push(n ? `Removed ${n} planned session${n === 1 ? "" : "s"} that fell after the new race day. The rest of the plan is unchanged; use Rebuild plan to re-plan it.` : "The plan was left as is. Use Rebuild plan to re-plan it.");
+      const { supabase: db, userId } = await requireUser();
+      const { data: late } = await db.from("workouts").select("*").eq("race_id", id).eq("generated", true).eq("status", "planned").gt("workout_date", after.race_date);
+      const n = late?.length ?? 0;
+      if (n) {
+        undo = await toTrash(db, userId, "plan_sessions", `${after.name}: ${n} planned sessions`, { workouts: late, back: "/workouts" });
+        await db.from("workouts").delete().in("id", (late ?? []).map((w) => w.id as string));
+      }
+      const names = (late ?? []).slice(0, 4).map((w) => `${formatDay(w.workout_date as string)} ${w.title as string}`).join("; ");
+      lines.push(n ? `Removed ${n} planned session${n === 1 ? "" : "s"} that fell after the new race day (${names}${n > 4 ? ` and ${n - 4} more` : ""}). Undo puts them back. The rest of the plan is unchanged; use Rebuild plan to re-plan it.` : "The plan was left as is. Use Rebuild plan to re-plan it.");
     }
   }
   revalidatePath("/", "layout");
-  redirect(flash(`/races/${id}`, lines.join(" ")));
+  redirect(withUndo(flash(`/races/${id}`, lines.join(" ")), undo, "Plan sessions"));
 }
 
 export async function regeneratePlan(formData: FormData) {
@@ -172,7 +194,7 @@ export async function regeneratePlan(formData: FormData) {
   if (!data) fail("Race not found.");
   const result = await applyPlan(data);
   revalidatePath("/", "layout");
-  redirect(flash(`/races/${id}/plan`, planSummary(result, "rebuilt")));
+  redirect(withUndo(flash(`/races/${id}/plan`, planSummary(result, "rebuilt")), result.undo ?? null, "Plan sessions"));
 }
 
 export async function deleteRace(formData: FormData) {
@@ -281,13 +303,15 @@ export async function realignPlan(formData: FormData) {
     .select("id");
   const nSkipped = skipped?.length ?? 0;
 
+  let undo: string | null = null;
   let message = `Marked ${nSkipped} missed session${nSkipped === 1 ? "" : "s"} as skipped. The rest of the plan is unchanged.`;
   if (mode === "rebuild") {
-    const { removed, added } = await applyPlan(race);
-    message = `Marked ${nSkipped} missed session${nSkipped === 1 ? "" : "s"} as skipped, removed ${removed} upcoming planned sessions and added ${added}, rebuilt back from race day.`;
+    const result = await applyPlan(race);
+    undo = result.undo ?? null;
+    message = `Marked ${nSkipped} missed session${nSkipped === 1 ? "" : "s"} as skipped. ${planSummary(result, "rebuilt")}`;
   }
   revalidatePath("/", "layout");
-  redirect(`/workouts?notice=${encodeURIComponent(message)}`);
+  redirect(withUndo(`/workouts?notice=${encodeURIComponent(message)}`, undo, "Plan sessions"));
 }
 
 /** Saves the user's training days and long-session day, then rebuilds this race's plan around them. */
@@ -303,5 +327,5 @@ export async function savePlanPrefs(formData: FormData) {
   if (!race) redirect(flash("/races", "Saved your training days."));
   const result = await applyPlan(race);
   revalidatePath("/", "layout");
-  redirect(flash(back, `Saved your days. ${planSummary(result, "rebuilt")}`));
+  redirect(withUndo(flash(back, `Saved your days. ${planSummary(result, "rebuilt")}`), result.undo ?? null, "Plan sessions"));
 }
