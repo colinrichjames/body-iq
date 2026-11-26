@@ -143,7 +143,10 @@ export default async function RacesPage({ searchParams }: { searchParams: Promis
             {past.map((r) => (
               <li key={r.id} className="flex items-center justify-between text-sm text-zinc-400">
                 <span>
-                  {r.name} &middot; {formatDay(r.race_date, { weekday: false, year: true })}
+                  <Link href={`/races/${r.id}`} className="underline-offset-2 active:underline">
+                    {r.name}
+                  </Link>{" "}
+                  &middot; {formatDay(r.race_date, { weekday: false, year: true })}
                 </span>
                 <form action={deleteRace}>
                   <input type="hidden" name="id" value={r.id} />

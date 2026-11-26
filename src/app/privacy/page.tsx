@@ -75,7 +75,12 @@ export default function PrivacyPage() {
         </ul>
       </Section>
 
-      <p className="mt-8 text-xs text-zinc-500">Body IQ is not a medical service. It gives training and nutrition estimates, not medical advice.</p>
+      <p className="mt-8 text-sm">
+        <Link href="/terms" className="text-emerald-400 underline">
+          Terms of service
+        </Link>
+      </p>
+      <p className="mt-3 text-xs text-zinc-500">Body IQ is not a medical service. It gives training and nutrition estimates, not medical advice.</p>
     </main>
   );
 }

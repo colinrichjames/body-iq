@@ -91,6 +91,10 @@ export default async function LoginPage({
         <Link href="/privacy" className="underline">
           Privacy: what Body IQ stores
         </Link>
+        {" · "}
+        <Link href="/terms" className="underline">
+          Terms
+        </Link>
       </p>
 
       {error && (

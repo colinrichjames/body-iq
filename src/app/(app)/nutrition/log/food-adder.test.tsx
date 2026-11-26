@@ -27,6 +27,16 @@ describe("FoodAdder tabs", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(cleanup);
 
+  it("remembers the meal picked today across a remount", () => {
+    localStorage.clear();
+    const first = mount();
+    fireEvent.click(screen.getByRole("button", { name: "dinner" }));
+    first.unmount();
+    mount();
+    expect(screen.getByRole("button", { name: "dinner" }).className).toContain("bg-emerald-500");
+    localStorage.clear();
+  });
+
   it("shows the five tabs", () => {
     mount();
     for (const t of ["Search", "Recent", "Frequent", "Favourites", "Meals"]) expect(screen.getByRole("tab", { name: t })).toBeTruthy();

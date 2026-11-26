@@ -27,6 +27,19 @@ const foodToItem = (f: Food): MealItem => ({ name: f.name, brand: f.brand, amoun
 
 const MEALS = ["breakfast", "lunch", "dinner", "snack"] as const;
 
+const MEAL_KEY = "bodyiq-meal";
+
+/** The meal picked earlier today on this device (so it survives a reload and the refresh after each add), if any. */
+function storedMeal(): (typeof MEALS)[number] | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(MEAL_KEY) ?? "null") as { day?: string; meal?: string } | null;
+    if (v && v.day === new Date().toDateString() && (MEALS as readonly string[]).includes(v.meal ?? "")) return v.meal as (typeof MEALS)[number];
+  } catch {
+    // storage unavailable
+  }
+  return null;
+}
+
 function defaultMeal(): (typeof MEALS)[number] {
   const h = new Date().getHours();
   return h < 10 ? "breakfast" : h < 15 ? "lunch" : h < 21 ? "dinner" : "snack";
@@ -35,7 +48,15 @@ function defaultMeal(): (typeof MEALS)[number] {
 export function FoodAdder({ day, initialMeal, recents, frequent, favourites, meals }: { day: string; initialMeal?: (typeof MEALS)[number]; recents: MealItem[]; frequent: { item: MealItem; count: number }[]; favourites: SavedFood[]; meals: SavedFood[] }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [meal, setMeal] = useState<(typeof MEALS)[number]>(() => initialMeal ?? defaultMeal());
+  const [meal, setMeal] = useState<(typeof MEALS)[number]>(() => initialMeal ?? storedMeal() ?? defaultMeal());
+  const pickMeal = (m: (typeof MEALS)[number]) => {
+    setMeal(m);
+    try {
+      localStorage.setItem(MEAL_KEY, JSON.stringify({ day: new Date().toDateString(), meal: m }));
+    } catch {
+      // storage unavailable
+    }
+  };
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Food[]>([]);
   const [busy, setBusy] = useState(false);
@@ -238,7 +259,7 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
       <h2 className="font-medium">Add food</h2>
       <div className="mt-3 grid grid-cols-4 gap-1 rounded-xl bg-zinc-900 p-1 text-xs">
         {MEALS.map((m) => (
-          <button key={m} type="button" onClick={() => setMeal(m)} className={`rounded-lg py-2 capitalize ${meal === m ? "bg-emerald-500 font-medium text-zinc-950" : "text-zinc-400"}`}>
+          <button key={m} type="button" onClick={() => pickMeal(m)} className={`rounded-lg py-2 capitalize ${meal === m ? "bg-emerald-500 font-medium text-zinc-950" : "text-zinc-400"}`}>
             {m}
           </button>
         ))}
@@ -428,7 +449,7 @@ export function FoodAdder({ day, initialMeal, recents, frequent, favourites, mea
       )}
 
       {picked && (
-        <FoodOverview food={picked} servings={servings} onServings={setServings} meal={meal} meals={MEALS} onMeal={(m) => setMeal(m as (typeof MEALS)[number])} saving={saving} note={note} onLog={() => void submitPicked()} onBack={() => (setPicked(null), setNote(null))} />
+        <FoodOverview food={picked} servings={servings} onServings={setServings} meal={meal} meals={MEALS} onMeal={(m) => pickMeal(m as (typeof MEALS)[number])} saving={saving} note={note} onLog={() => void submitPicked()} onBack={() => (setPicked(null), setNote(null))} />
       )}
 
       {manual && (

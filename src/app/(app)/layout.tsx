@@ -12,7 +12,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
       <Suspense fallback={null}>
         <UndoBanner />
       </Suspense>
-      <div className="pb-32">{children}</div>
+      <div className="pb-40">{children}</div>
       <BottomNav />
     </ToastProvider>
   );
