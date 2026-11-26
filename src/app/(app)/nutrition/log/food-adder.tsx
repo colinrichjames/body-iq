@@ -30,10 +30,10 @@ function defaultMeal(): (typeof MEALS)[number] {
   return h < 10 ? "breakfast" : h < 15 ? "lunch" : h < 21 ? "dinner" : "snack";
 }
 
-export function FoodAdder({ day, recents, frequent, favourites, meals }: { day: string; recents: MealItem[]; frequent: { item: MealItem; count: number }[]; favourites: SavedFood[]; meals: SavedFood[] }) {
+export function FoodAdder({ day, initialMeal, recents, frequent, favourites, meals }: { day: string; initialMeal?: (typeof MEALS)[number]; recents: MealItem[]; frequent: { item: MealItem; count: number }[]; favourites: SavedFood[]; meals: SavedFood[] }) {
   const router = useRouter();
   const { toast } = useToast();
-  const [meal, setMeal] = useState<(typeof MEALS)[number]>(defaultMeal);
+  const [meal, setMeal] = useState<(typeof MEALS)[number]>(() => initialMeal ?? defaultMeal());
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Food[]>([]);
   const [busy, setBusy] = useState(false);
@@ -204,7 +204,7 @@ export function FoodAdder({ day, recents, frequent, favourites, meals }: { day: 
   const scaled = picked ? scaleFood(picked, Number(servings) > 0 ? Number(servings) : 0) : null;
 
   return (
-    <section className={`${card} mt-5`}>
+    <section id="add" className={`${card} mt-5 scroll-mt-4`}>
       <h2 className="font-medium">Add food</h2>
       <div className="mt-3 grid grid-cols-4 gap-1 rounded-xl bg-zinc-900 p-1 text-xs">
         {MEALS.map((m) => (
