@@ -46,9 +46,7 @@ export function FoodOverview({ food, servings, onServings, meal, meals, onMeal, 
           &larr;
         </button>
         <h2 className="text-lg font-semibold">Add Food</h2>
-        <button type="button" onClick={onLog} disabled={saving || !(n > 0)} className="-mr-2 px-2 py-1 text-lg font-semibold text-emerald-400 disabled:opacity-40">
-          {saving ? "..." : "Log"}
-        </button>
+        <span aria-hidden className="w-8" />
       </header>
 
       <div className="mx-auto w-full max-w-md flex-1 pb-10">

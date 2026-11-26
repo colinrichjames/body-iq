@@ -36,11 +36,11 @@ describe("FoodOverview", () => {
     expect(container.textContent).toContain("60 g");
   });
 
-  it("logs from the header and the bottom button, and goes back", () => {
+  it("has one log button, named for the meal, and goes back", () => {
     const { props } = mount();
-    fireEvent.click(screen.getByRole("button", { name: "Log" }));
+    expect(screen.queryByRole("button", { name: "Log" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Add to breakfast" }));
-    expect(props.onLog).toHaveBeenCalledTimes(2);
+    expect(props.onLog).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(props.onBack).toHaveBeenCalled();
   });
@@ -55,6 +55,6 @@ describe("FoodOverview", () => {
 
   it("can't log zero servings", () => {
     mount({ servings: "0" });
-    expect((screen.getByRole("button", { name: "Log" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "Add to breakfast" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

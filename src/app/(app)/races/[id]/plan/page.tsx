@@ -163,7 +163,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
                         <Link href={`/workouts/${s.id}`} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                           <span className="min-w-0">
                             <span className="block text-xs text-zinc-500">{formatDay(s.date, { weekday: true })}</span>
-                            <span className={`block truncate ${s.status === "completed" ? "text-zinc-500 line-through" : ""}`}>{s.title}</span>
+                            <span className={`block truncate ${s.status === "completed" ? "text-zinc-400" : ""}`}>{s.status === "completed" && <span aria-label="Done" className="mr-1 text-emerald-400">✓</span>}{s.title}</span>
                           </span>
                           <span className="shrink-0 text-xs tabular-nums text-zinc-500">{s.status === "completed" ? "Done" : s.minutes ? `${s.minutes} min` : ""}</span>
                         </Link>
