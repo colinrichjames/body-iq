@@ -9,7 +9,8 @@ import { HARD_DAY_RPE } from "@/lib/intensity";
 import { stackingWarnings } from "@/lib/stacking";
 import { weekSummary } from "@/lib/week";
 import { realignPlan } from "../races/actions";
-import { adaptMissed } from "./actions";
+import { acceptAdaptation, adaptMissed, dismissAdaptation } from "./actions";
+import { adaptationOffer } from "@/lib/missed-offer";
 import { adherence, planMissed, streaks } from "@/lib/adherence";
 import type { Workout } from "@/lib/types";
 import { btnPrimary } from "@/components/ui";
@@ -59,6 +60,7 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
   const { data: raceRows } = await supabase.from("races").select("id,race_date");
   const raceDates = Object.fromEntries((raceRows ?? []).map((r) => [r.id as string, r.race_date as string]));
   const missedPlan = planMissed(history, today, raceDates);
+  const offer = adaptationOffer(history, today, raceDates);
   const adh7 = adherence(history, today, 7);
   const adh28 = adherence(history, today, 28);
   const streak = streaks(history, today);
@@ -103,6 +105,28 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
         </Link>
       </div>
 
+
+      {offer && (
+        <section className="mt-4 rounded-2xl border border-emerald-900 bg-emerald-950/20 p-4 text-sm" aria-label="Plan suggestion">
+          <p className="font-medium text-emerald-300">{offer.headline}</p>
+          <p className="mt-1 text-zinc-300">{offer.detail}</p>
+          <p className="mt-1 text-xs text-zinc-500">Nothing changes unless you accept.</p>
+          <div className="mt-3 flex gap-2">
+            <form action={acceptAdaptation}>
+              <input type="hidden" name="id" value={offer.id} />
+              <button type="submit" className="rounded-xl bg-emerald-500 px-3 py-2 font-medium text-zinc-950 active:bg-emerald-400">
+                {offer.kind === "move" ? "Accept: move it" : offer.kind === "trim" ? `Accept: trim ${offer.trimPct}%` : "Accept: drop it"}
+              </button>
+            </form>
+            <form action={dismissAdaptation}>
+              <input type="hidden" name="id" value={offer.id} />
+              <button type="submit" className="rounded-xl border border-zinc-700 px-3 py-2 text-zinc-200 active:bg-zinc-800">
+                Dismiss
+              </button>
+            </form>
+          </div>
+        </section>
+      )}
 
       {missedPlan.missed.length > 0 && (
         <section className="mt-4 rounded-2xl border border-amber-900 bg-amber-950/30 p-4 text-sm">

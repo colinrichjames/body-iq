@@ -21,6 +21,7 @@ import type { BlockLog, SetLog, Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
 import { dbError } from "@/lib/db-error";
 import { copyRow } from "@/lib/workout-copy";
+import { adaptationOffer, trimmed, type AW } from "@/lib/missed-offer";
 
 const SPORTS: Sport[] = ["strength", "run", "bike", "swim", "hyrox", "mobility", "other"];
 
@@ -501,6 +502,63 @@ export async function adaptMissed(formData: FormData) {
   if (skipIds.length) parts.push(`${moves.length ? "skipped" : "Skipped"} ${plural(skipIds.length)}`);
   revalidatePath("/", "layout");
   redirect(flash("/workouts", parts.length ? `${parts.join(", ")}.` : "Nothing was missed."));
+}
+
+/** The offer for a skipped or missed plan session, computed from the database (never from what the page showed). */
+async function currentOffer(supabase: Awaited<ReturnType<typeof requireUser>>["supabase"], today: string, id: string) {
+  const { data } = await supabase
+    .from("workouts")
+    .select("id,workout_date,status,title,sport,race_id,planned_duration_min,generated,adaptation_handled_at")
+    .gte("workout_date", addDays(today, -8))
+    .lte("workout_date", addDays(today, 8))
+    .returns<AW[]>();
+  const rows = data ?? [];
+  const raceIds = [...new Set(rows.map((w) => w.race_id).filter((x): x is string => !!x))];
+  const raceDates: Record<string, string> = {};
+  if (raceIds.length) {
+    const { data: races } = await supabase.from("races").select("id,race_date").in("id", raceIds);
+    for (const r of races ?? []) raceDates[r.id as string] = r.race_date as string;
+  }
+  const offer = adaptationOffer(rows, today, raceDates);
+  return { offer: offer && offer.id === id ? offer : null, rows };
+}
+
+/** Accept the coach's one offer about a skipped or missed session: move it, trim next week, or drop it. */
+export async function acceptAdaptation(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const today = await getToday();
+  const { offer, rows } = await currentOffer(supabase, today, id);
+  if (!offer) redirect(flash("/workouts", "That suggestion is no longer available."));
+  const handled = new Date().toISOString();
+  let message = "";
+  if (offer.kind === "move" && offer.to) {
+    const { error } = await supabase.from("workouts").update({ workout_date: offer.to, status: "planned", adaptation_handled_at: handled }).eq("id", id);
+    if (error) redirect(flash("/workouts", `Couldn't move it. ${dbError(error)}`));
+    message = `Moved ${offer.title} to ${formatDay(offer.to, { weekday: true })}.`;
+  } else if (offer.kind === "trim" && offer.trimIds && offer.trimPct) {
+    for (const t of rows.filter((r) => offer.trimIds!.includes(r.id))) {
+      const { error } = await supabase.from("workouts").update({ planned_duration_min: trimmed(t.planned_duration_min ?? 0, offer.trimPct) }).eq("id", t.id).eq("status", "planned");
+      if (error) redirect(flash("/workouts", `Couldn't trim the week. ${dbError(error)}`));
+    }
+    await supabase.from("workouts").update({ status: "skipped", adaptation_handled_at: handled }).eq("id", id);
+    message = `Cut ${offer.trimIds.length} planned session${offer.trimIds.length === 1 ? "" : "s"} by ${offer.trimPct}%. ${offer.title} stays skipped.`;
+  } else {
+    await supabase.from("workouts").update({ status: "skipped", adaptation_handled_at: handled }).eq("id", id);
+    message = `Dropped ${offer.title}. The plan is unchanged.`;
+  }
+  revalidatePath("/", "layout");
+  redirect(flash("/workouts", message));
+}
+
+/** Dismiss the offer: nothing changes, and it isn't offered again. */
+export async function dismissAdaptation(formData: FormData) {
+  const { supabase } = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const { error } = await supabase.from("workouts").update({ adaptation_handled_at: new Date().toISOString() }).eq("id", id);
+  if (error) redirect(flash("/workouts", dbError(error, true)));
+  revalidatePath("/", "layout");
+  redirect(flash("/workouts", "Okay, the plan is unchanged."));
 }
 
 /**
