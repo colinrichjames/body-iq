@@ -1,3 +1,4 @@
+import { PaceHint } from "@/components/pace-hint";
 import { SubmitButton } from "@/components/submit-button";
 import { fromKm } from "@/lib/distance";
 import Link from "next/link";
@@ -43,6 +44,7 @@ export default async function EditWorkoutPage({ params, searchParams }: { params
             <option value="km">km</option>
           </select>
         </div>
+        <PaceHint />
         <input name="workout_date" type="date" defaultValue={w.workout_date} required className={field} />
         <Field label="Notes and details"><textarea name="description" rows={4} defaultValue={w.description ?? ""} className={field} /></Field>
         <ExerciseEditor initial={s?.exercises ?? []} />

@@ -28,6 +28,11 @@ export function paceProblem(minutes: number | null, km: number | null): string |
   return null;
 }
 
+/** The pace check for a saved or planned session. Only runs have a pace band today; other sports pass. */
+export function sessionPaceProblem(sport: string, minutes: number | null, km: number | null): string | null {
+  return sport === "run" ? paceProblem(minutes, km) : null;
+}
+
 export function fmtPace(minutes: number, km: number, unit: DistUnit): string {
   const p = minutes / fromKmExact(km, unit);
   const m = Math.floor(p);
