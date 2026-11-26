@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { GarminSyncCard } from "@/components/garmin-sync-card";
+import { loadGarminStatus } from "@/lib/garmin-status";
 import { addDays, formatDay, isIsoDate, startOfSundayWeek } from "@/lib/dates";
-import { getToday } from "@/lib/today";
+import { getTimeZone, getToday } from "@/lib/today";
 import { computeLoad } from "@/lib/load";
 import { HARD_DAY_RPE } from "@/lib/intensity";
 import { stackingWarnings } from "@/lib/stacking";
@@ -40,6 +42,7 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
     .order("workout_date")
     .order("created_at")
     .returns<Workout[]>();
+  const garmin = await loadGarminStatus(supabase);
   const history = data ?? [];
   const workouts = history.filter((w) => w.workout_date >= weekStart && w.workout_date <= weekEnd);
   const load = computeLoad(history, today, weekStart, workouts);
@@ -77,6 +80,8 @@ export default async function WorkoutsPage({ searchParams }: { searchParams: Pro
           Add workout
         </Link>
       </div>
+
+      <GarminSyncCard connected={garmin.connected} last={garmin.last} tz={await getTimeZone()} from="/workouts" />
 
       <Link href="/workouts/quick" className="mt-4 flex items-center justify-between rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 active:bg-emerald-500/20">
         <span>

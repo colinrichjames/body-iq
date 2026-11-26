@@ -17,9 +17,11 @@ import { CheckinCard } from "@/components/checkin-card";
 import { fuelForDay } from "@/lib/fuel";
 import { classify } from "@/lib/intensity";
 import { swapHardSession } from "../workouts/actions";
+import { GarminSyncCard } from "@/components/garmin-sync-card";
+import { loadGarminStatus } from "@/lib/garmin-status";
 import { saveGuestAccount } from "./guest-actions";
 import { targetsFor } from "@/lib/targets";
-import type { BodyScan, DailyHealth, NutritionDay, Profile, RecoveryCheckin, Race, SyncRun, Workout } from "@/lib/types";
+import type { BodyScan, DailyHealth, NutritionDay, Profile, RecoveryCheckin, Race, Workout } from "@/lib/types";
 
 function delta(latest: number | null, previous: number | null, digits = 1) {
   if (latest === null || previous === null) return null;
@@ -30,14 +32,13 @@ export default async function DashboardPage() {
   const { supabase, userId, email, isGuest } = await requireUser();
   const today = await getToday();
 
-  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, syncRes, checkinRes] = await Promise.all([
+  const [scansRes, workoutsRes, nutritionRes, profileRes, racesRes, healthRes, checkinRes] = await Promise.all([
     supabase.from("body_scans").select("*").order("scanned_at", { ascending: false }).limit(2).returns<BodyScan[]>(),
     supabase.from("workouts").select("*").gte("workout_date", addDays(today, -27)).lte("workout_date", addDays(today, 1)).returns<Workout[]>(),
     supabase.from("nutrition_days").select("*").gte("day", addDays(today, -13)).order("day", { ascending: false }).returns<NutritionDay[]>(),
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle<Profile>(),
     supabase.from("races").select("*").gte("race_date", today).order("race_date").limit(1).returns<Race[]>(),
     supabase.from("daily_health").select("*").order("day", { ascending: false }).limit(14).returns<DailyHealth[]>(),
-    supabase.from("sync_runs").select("*").order("started_at", { ascending: false }).limit(1).returns<SyncRun[]>(),
       supabase.from("recovery_checkins").select("day,sleep_hours,soreness,energy").order("day", { ascending: false }).limit(14).returns<RecoveryCheckin[]>(),
   ]);
   const scans = scansRes.data ?? [];
@@ -57,7 +58,7 @@ export default async function DashboardPage() {
   const coach = await loadCoach(supabase, today, profileRes.data ?? null);
   const { data: finishedRows } = await supabase.from("day_finishes").select("day").gte("day", addDays(today, -400)).returns<{ day: string }[]>();
   const streak = loggingStreak((finishedRows ?? []).map((r) => r.day), today);
-  const lastSync = syncRes.data?.[0] ?? null;
+  const garmin = await loadGarminStatus(supabase);
   const todayFuel = (nutritionRes.data ?? []).find((d) => d.day === today) ?? null;
   // The Today card already lists planned sessions, so only the nudges it doesn't cover are shown here.
   const reminders = dueReminders({
@@ -91,6 +92,8 @@ export default async function DashboardPage() {
           <Link href="/profile" className="mt-1 block truncate text-sm text-zinc-500">{isGuest ? "Guest" : email}</Link>
         </div>
       </header>
+
+      <GarminSyncCard connected={garmin.connected} last={garmin.last} tz={await getTimeZone()} from="/dashboard" />
 
       {isGuest && (
         <section className="mt-4 rounded-2xl border border-amber-700/50 bg-amber-950/20 p-4">
@@ -222,17 +225,6 @@ export default async function DashboardPage() {
         <div className="mt-4">
           <CheckinCard today={today} existing={todaysCheckin} from="/dashboard" />
         </div>
-        <p className="mt-3 border-t border-zinc-800 pt-3 text-xs text-zinc-500">
-          Garmin sync:{" "}
-          {lastSync
-            ? `${lastSync.status === "success" ? "last success" : lastSync.status} ${new Date(lastSync.finished_at ?? lastSync.started_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${lastSync.error ? `, ${lastSync.error}` : ""}`
-            : "not connected yet"}{" "}
-          {!lastSync && (
-            <Link href="/connect" className="text-emerald-400">
-              Connect
-            </Link>
-          )}
-        </p>
       </section>
 
       {nextRace && (
