@@ -21,9 +21,9 @@ export type Food = {
 type Nutriments = Record<string, unknown>;
 type OffProduct = {
   code?: string;
-  product_name?: string;
-  product_name_en?: string;
-  brands?: string;
+  product_name?: unknown;
+  product_name_en?: unknown;
+  brands?: string | string[];
   serving_size?: string;
   serving_quantity?: number | string;
   nutriments?: Nutriments;
@@ -35,10 +35,27 @@ const n = (v: unknown): number | null => {
 };
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
+/** Brands arrive as "A, B" from the classic API and as a list from the newer search API. */
+function firstBrand(b: string | string[] | undefined): string | null {
+  const first = Array.isArray(b) ? b[0] : typeof b === "string" ? b.split(",")[0] : "";
+  return typeof first === "string" ? first.trim().slice(0, 120) || null : null;
+}
+
+/** The newer search API can return names as a plain string or as a per-language object/list. Reduce to a string. */
+export function offName(v: unknown): string | undefined {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) return offName(v[0]);
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return offName(o.en ?? o.main ?? Object.values(o)[0]);
+  }
+  return undefined;
+}
+
 /** Converts an Open Food Facts product to per-serving values. Returns null if it has no calories to use. */
 export function foodFromOff(p: OffProduct): Food | null {
   const nu = p.nutriments ?? {};
-  const name = (p.product_name || p.product_name_en || "").trim();
+  const name = (offName(p.product_name) || offName(p.product_name_en) || "").trim();
   if (!name) return null;
   const servingG = n(p.serving_quantity);
   const grams = servingG && servingG > 0 && servingG <= 2000 ? servingG : 100;
@@ -61,7 +78,7 @@ export function foodFromOff(p: OffProduct): Food | null {
     source: "off",
     barcode: p.code ? String(p.code) : null,
     name: name.slice(0, 160),
-    brand: p.brands ? p.brands.split(",")[0].trim().slice(0, 120) || null : null,
+    brand: firstBrand(p.brands),
     servingLabel: label,
     calories: r1(kcal100 * f),
     protein_g: r1(per("proteins") ?? 0),
