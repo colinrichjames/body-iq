@@ -27,6 +27,26 @@ export async function sendMagicLink(formData: FormData) {
   redirect(`/login?sent=${encodeURIComponent(email)}`);
 }
 
+/** Google sign-in via Supabase OAuth. Returns through /auth/confirm, which exchanges the code. */
+export async function signInWithGoogle() {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: `${proto}://${host}/auth/confirm` },
+  });
+  if (error || !data.url) {
+    const off = /provider is not enabled|unsupported provider/i.test(error?.message ?? "");
+    redirect(
+      `/login?error=${encodeURIComponent(off ? "Google sign-in isn't switched on yet. Use email or guest for now." : friendlyAuthError(error?.message, error?.code))}`,
+    );
+  }
+  redirect(data.url);
+}
+
 /** Guest mode: an anonymous Supabase session, no email needed. Can be upgraded to a real account later. */
 export async function continueAsGuest() {
   const supabase = await createClient();
