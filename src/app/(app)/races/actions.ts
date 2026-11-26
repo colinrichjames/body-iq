@@ -180,7 +180,10 @@ export async function deleteRace(formData: FormData) {
   // Remove the unfinished generated sessions; completed history stays (race_id becomes null).
   await supabase.from("workouts").delete().eq("race_id", id).eq("generated", true).eq("status", "planned").gte("workout_date", today);
   const { error } = await supabase.from("races").delete().eq("id", id);
-  if (error) fail(error.message);
+  if (error) {
+    console.error("deleteRace failed", error.message);
+    redirect(flash("/races", "Couldn't delete the race. Please try again."));
+  }
   revalidatePath("/", "layout");
   redirect(withUndo("/races", undo, race?.name ?? "Race"));
 }

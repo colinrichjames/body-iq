@@ -137,7 +137,12 @@ export async function deleteWorkout(formData: FormData) {
     const { data: sets } = await supabase.from("workout_sets").select("*").eq("workout_id", id);
     undo = await toTrash(supabase, userId, "workout", workout.title, { workout, sets: sets ?? [] });
   }
-  await supabase.from("workouts").delete().eq("id", id);
+  await supabase.from("workout_sets").delete().eq("workout_id", id);
+  const { error } = await supabase.from("workouts").delete().eq("id", id);
+  if (error) {
+    console.error("deleteWorkout failed", error.message);
+    redirect(flash(`/workouts/${id}`, "Couldn't delete the workout. Please try again."));
+  }
   refresh();
   redirect(withUndo("/workouts", undo, workout?.title ?? "Workout"));
 }

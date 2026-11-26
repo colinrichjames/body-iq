@@ -128,7 +128,7 @@ export default async function ConnectPage({ searchParams }: { searchParams: Prom
               </button>
             </form>
             <form action={disconnectGarmin}>
-              <ConfirmButton message="Disconnect Garmin? Your key is deleted from Body IQ and can't be restored. You'd need to paste it again." className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
+              <ConfirmButton confirmLabel="Disconnect" message="Disconnect Garmin? Your key is deleted from Body IQ and can't be restored. You'd need to paste it again." className="px-3 py-2 text-sm text-zinc-500 active:text-red-400">
                 Disconnect
               </ConfirmButton>
             </form>

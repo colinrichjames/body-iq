@@ -89,7 +89,7 @@ export default async function ProfilePage() {
 
       <form action={signOut} className="mt-6">
         {isGuest ? (
-          <ConfirmButton message="Leave the guest session? Everything you entered as a guest is deleted and can't be restored." className="w-full rounded-xl border border-zinc-700 px-4 py-3 text-zinc-200 active:bg-zinc-800">
+          <ConfirmButton confirmLabel="Leave" message="Leave the guest session? Everything you entered as a guest is deleted and can't be restored." className="w-full rounded-xl border border-zinc-700 px-4 py-3 text-zinc-200 active:bg-zinc-800">
             Leave guest session
           </ConfirmButton>
         ) : (

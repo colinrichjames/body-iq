@@ -11,7 +11,7 @@ import { benchmarkRows, fmtDelta } from "@/lib/benchmarks";
 import { getToday } from "@/lib/today";
 import type { HyroxBenchmark, Race } from "@/lib/types";
 import { btnGhost, card, field } from "@/components/ui";
-import { addBenchmark, deleteBenchmark } from "../actions";
+import { addBenchmark, deleteBenchmark, deleteRace } from "../actions";
 import { PlanImporter } from "./plan-importer";
 import { Field } from "@/components/field";
 
@@ -83,6 +83,12 @@ export default async function RacePage({
       <Link href={`/races/${race.id}/edit`} className="mt-3 inline-block rounded-xl border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 active:bg-zinc-800">
         Edit race
       </Link>
+      <form action={deleteRace} className="ml-2 mt-3 inline-block">
+        <input type="hidden" name="id" value={race.id} />
+        <ConfirmButton message={`Delete ${race.name}? Its unfinished planned sessions are deleted too; completed workouts stay. You can undo right after.`} className="rounded-xl border border-zinc-800 px-3 py-1.5 text-sm text-zinc-400 active:text-red-400">
+          Delete
+        </ConfirmButton>
+      </form>
       {dayCard && (
         <section className={`${card} mt-4 border-emerald-900`} aria-label="Race day plan">
           <h2 className="font-medium text-emerald-400">{dayCard.heading}</h2>
