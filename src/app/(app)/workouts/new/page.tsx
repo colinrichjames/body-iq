@@ -38,7 +38,7 @@ export default async function NewWorkoutPage({ searchParams }: { searchParams: P
           <Field label="Minutes"><input name="planned_duration_min" type="number" inputMode="numeric" min="1" className={field} /></Field>
         </div>
         <div className="grid grid-cols-[1fr_auto] gap-3">
-          <Field label="Planned distance (optional)"><input name="planned_distance" type="number" inputMode="decimal" step="any" min="0" defaultValue={""} className={field} /></Field>
+          <Field label="Planned distance (optional)"><input name="planned_distance" type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" defaultValue={""} className={field} /></Field>
           <select name="distance_unit" defaultValue={defaultUnit} className={field} aria-label="Distance unit">
             <option value="mi">mi</option>
             <option value="km">km</option>

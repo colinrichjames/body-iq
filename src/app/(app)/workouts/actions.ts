@@ -33,7 +33,7 @@ function numOrNull(v: FormDataEntryValue | null): number | null {
 /** Planned distance typed in mi or km, stored as km (4 decimals) with the unit the user picked. */
 function distanceFields(formData: FormData) {
   const unit = isUnit(formData.get("distance_unit")) ? (formData.get("distance_unit") as DistUnit) : "mi";
-  const v = numOrNull(formData.get("planned_distance"));
+  const v = numOrNull(String(formData.get("planned_distance") ?? "").replace(",", "."));
   return { planned_distance_km: v !== null && v > 0 && v < 1000 ? toKm(v, unit) : null, distance_unit: unit };
 }
 

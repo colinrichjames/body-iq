@@ -32,3 +32,21 @@ describe("sessionPaceProblem", () => {
     expect(sessionPaceProblem("strength", 1, 50)).toBeNull();
   });
 });
+
+describe("distance round trip", () => {
+  it("reads back exactly what was typed, in mi and km, for every 0.01 up to 100", () => {
+    for (let i = 1; i <= 10000; i++) {
+      const typed = i / 100;
+      for (const unit of ["mi", "km"] as const) {
+        // Stored as numeric(9,4); a string like "4.9890" is what the API returns, so go through String() too.
+        const stored = Number(String(toKm(typed, unit).toFixed(4)));
+        expect(fromKm(stored, unit)).toBe(typed);
+      }
+    }
+  });
+  it("3.1 mi is exactly 3.1 and never a float32 artifact", () => {
+    const back = fromKm(Number("4.9890"), "mi");
+    expect(back).toBe(3.1);
+    expect(String(back)).toBe("3.1");
+  });
+});
