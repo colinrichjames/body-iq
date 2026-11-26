@@ -20,6 +20,7 @@ import { insightsText, sessionInsights } from "@/lib/session-insights";
 import type { BlockLog, SetLog, Workout, WorkoutStructure } from "@/lib/types";
 import type { Sport } from "@/lib/types";
 import { dbError } from "@/lib/db-error";
+import { copyRow } from "@/lib/workout-copy";
 
 const SPORTS: Sport[] = ["strength", "run", "bike", "swim", "hyrox", "mobility", "other"];
 
@@ -355,20 +356,10 @@ export async function duplicateWorkout(formData: FormData) {
   if (!w) redirect("/workouts");
   const { data: copy, error } = await supabase
     .from("workouts")
-    .insert({
-      user_id: userId,
-      workout_date: date,
-      sport: w.sport,
-      title: w.title,
-      description: w.description,
-      planned_duration_min: w.planned_duration_min,
-      structure: w.structure,
-      generated: false,
-      status: "planned",
-    })
+    .insert(copyRow(w, userId, date))
     .select("id")
     .single<{ id: string }>();
-  if (error || !copy) redirect(`/workouts/${id}?error=${encodeURIComponent(error?.message ?? "Copy failed.")}`);
+  if (error || !copy) redirect(`/workouts/${id}?error=${encodeURIComponent(error ? dbError(error, true) : "Copy failed.")}`);
   refresh();
   revalidatePath("/", "layout");
   redirect(flash(`/workouts/${copy.id}`, "Copied to the new date."));
