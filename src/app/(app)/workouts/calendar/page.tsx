@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { addDays, isIsoDate, weekdayIndex } from "@/lib/dates";
+import { addDays, isIsoDate, startOfSundayWeek } from "@/lib/dates";
 import { getToday } from "@/lib/today";
 import { SPORT_DOT, SPORT_NAME } from "@/lib/sport";
 import { btnPrimary } from "@/components/ui";
@@ -23,9 +23,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const ym = m && /^\d{4}-\d{2}$/.test(m) ? m : (sel ?? today).slice(0, 7);
   const first = `${ym}-01`;
   const next = shiftMonth(ym, 1);
-  const gridStart = addDays(first, -weekdayIndex(first));
+  const gridStart = startOfSundayWeek(first);
   const last = addDays(`${next}-01`, -1);
-  const gridEnd = addDays(last, 6 - weekdayIndex(last));
+  const gridEnd = addDays(startOfSundayWeek(last), 6);
   const cells: string[] = [];
   for (let c = gridStart; c <= gridEnd; c = addDays(c, 1)) cells.push(c);
 

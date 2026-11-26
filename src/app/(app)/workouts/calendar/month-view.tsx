@@ -66,7 +66,7 @@ export function MonthView({
     <>
       {error && <p className="mt-3 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
       <div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs text-zinc-500">
-        {["M", "T", "W", "T", "F", "S", "S"].map((x, i) => (
+        {["S", "M", "T", "W", "T", "F", "S"].map((x, i) => (
           <span key={i}>{x}</span>
         ))}
         {cells.map((c) => {
