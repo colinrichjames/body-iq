@@ -19,7 +19,7 @@ import type { DailyHealth, RecoveryCheckin } from "@/lib/types";
 import { sessionInsights, type SessionInsights } from "@/lib/session-insights";
 import { prText } from "@/lib/lifting";
 import { GYM_READY, isStale, isSwapped, stationsIn } from "@/lib/hyrox-swaps";
-import { fmtDist, fmtPace } from "@/lib/distance";
+import { fmtDist, fmtPace, sessionPaceProblem } from "@/lib/distance";
 import { buildSteps } from "@/lib/steps";
 import { restSummary } from "@/lib/context";
 import type { WorkoutSet } from "@/lib/types";
@@ -378,6 +378,12 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
       )}
 
       <div className="mt-6 space-y-3">
+        {w.status !== "completed" && w.sport === "run" && w.planned_duration_min && w.planned_distance_km ? (
+          <p className={`text-sm ${sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km) ? "text-red-400" : "text-zinc-400"}`}>
+            Pace {fmtPace(w.planned_duration_min, w.planned_distance_km, w.distance_unit)}
+            {sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km) ? `. ${sessionPaceProblem(w.sport, w.planned_duration_min, w.planned_distance_km)} Edit it before marking done.` : ""}
+          </p>
+        ) : null}
         {w.status !== "completed" && (
           <Link href={`/workouts/${w.id}/start`} className={`${btnPrimary} block text-center`}>
             {inProgress ? "Resume" : hasGuide ? "Start workout" : "Start timer"}
