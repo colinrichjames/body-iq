@@ -2,7 +2,8 @@
 
 import { requireUser } from "@/lib/auth";
 import { addDays } from "@/lib/dates";
-import { bodyWeightReply, findExercise, fuelReply, helpReply, lastLiftReply, nextLiftReply, parseIntent, raceReply, readinessReply, scoreReply, sessionReply, todayReply, unknownReply, type LiftSession, type Reply } from "@/lib/coach-chat";
+import { bodyWeightReply, findExercise, fuelReply, helpReply, lastLiftReply, nextLiftReply, parseIntent, raceReply, readinessReply, scoreReply, sessionReply, todayReply, unknownReply, type LiftSession, type ActionCard, type Reply } from "@/lib/coach-chat";
+import { parseAction, type CtxWorkout } from "@/lib/coach-actions";
 import { loadCoach } from "@/lib/coach-data";
 import { computeInsights } from "@/lib/insights";
 import { classify } from "@/lib/intensity";
@@ -25,6 +26,22 @@ export async function askCoach(text: string, ctx: { workoutId?: string } = {}): 
   const question = String(text ?? "").slice(0, 300);
   try {
     const today = await getToday();
+    // A request to change something becomes a proposal card. It is saved as "proposed" and changes nothing until confirmed.
+    const [{ data: ws }, { data: rs }] = await Promise.all([
+      supabase.from("workouts").select("id,title,sport,status,workout_date,structure,planned_duration_min,planned_distance_km,race_id,generated").gte("workout_date", addDays(today, -7)).lte("workout_date", addDays(today, 60)).returns<CtxWorkout[]>(),
+      supabase.from("races").select("id,name,race_date").gte("race_date", today).order("race_date").limit(3).returns<{ id: string; name: string; race_date: string }[]>(),
+    ]);
+    const act = parseAction(question, { today, workouts: ws ?? [], races: rs ?? [] });
+    if (act && "ask" in act) return { text: act.ask };
+    if (act) {
+      const cards: ActionCard[] = [];
+      for (const p of act.proposals) {
+        const { data, error } = await supabase.from("coach_actions").insert({ kind: p.kind, summary: p.title, params: p.params, status: "proposed" }).select("id").single<{ id: string }>();
+        if (error || !data) return { text: "I couldn't prepare that change, so nothing was changed. Try again in a moment." };
+        cards.push({ id: data.id, title: p.title, lines: p.lines, status: "proposed" });
+      }
+      return { text: "Here's what I'd change. Nothing happens until you confirm.", actions: cards };
+    }
     const intent = parseIntent(question);
     switch (intent.kind) {
       case "help":

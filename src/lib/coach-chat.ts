@@ -23,7 +23,10 @@ export type Intent =
   | { kind: "help" }
   | { kind: "unknown" };
 
-export type Reply = { text: string; lines?: string[]; links?: { label: string; href: string }[]; suggestions?: string[] };
+export type ActionStatus = "proposed" | "applied" | "dismissed" | "undone" | "failed";
+/** A change the coach proposes. Nothing happens until the user confirms the card. */
+export type ActionCard = { id: string; title: string; lines: string[]; status: ActionStatus; result?: string };
+export type Reply = { text: string; lines?: string[]; links?: { label: string; href: string }[]; suggestions?: string[]; actions?: ActionCard[] };
 
 export const STARTERS = ["What's my workout today?", "How am I doing on fuel today?", "What did I lift last time?", "Why did my weight change?", "Break down my Body IQ score", "Am I ready to train hard?"];
 
