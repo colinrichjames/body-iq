@@ -77,6 +77,9 @@ export default async function NutritionPage({ searchParams }: { searchParams: Pr
       {error && <p className="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-300">{error}</p>}
 
       <CoachCard coach={coach} today={today} from="/nutrition" />
+      <Link href={`/coach?q=${encodeURIComponent("How am I doing on fuel today?")}`} className="mt-3 inline-block text-sm text-emerald-400">
+        Ask coach about today&apos;s fuel
+      </Link>
 
       <section className={`${card} mt-5`}>
         <h2 className="text-sm text-zinc-400">Average vs target</h2>
