@@ -4,9 +4,18 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 
 const askCoach = vi.hoisted(() => vi.fn(async (...args: unknown[]) => ({ args, text: "Nothing is planned for today.", lines: ["No upcoming sessions are scheduled."] })));
 vi.mock("./actions", () => ({ askCoach }));
-const confirmAction = vi.hoisted(() => vi.fn(async (...a: string[]) => (a, { ok: true, status: "applied", message: "Moved to 2026-11-27." })));
-const dismissAction = vi.hoisted(() => vi.fn(async (...a: string[]) => (a, { ok: true, status: "dismissed", message: "Dismissed. Nothing changed." })));
-const undoAction = vi.hoisted(() => vi.fn(async (...a: string[]) => (a, { ok: true, status: "undone", message: "Undone. Moved back." })));
+const confirmAction = vi.hoisted(() => vi.fn(async (...a: string[]) => {
+  void a;
+  return { ok: true, status: "applied", message: "Moved to 2026-11-27." };
+}));
+const dismissAction = vi.hoisted(() => vi.fn(async (...a: string[]) => {
+  void a;
+  return { ok: true, status: "dismissed", message: "Dismissed. Nothing changed." };
+}));
+const undoAction = vi.hoisted(() => vi.fn(async (...a: string[]) => {
+  void a;
+  return { ok: true, status: "undone", message: "Undone. Moved back." };
+}));
 vi.mock("./confirm", () => ({ confirmAction, dismissAction, undoAction }));
 vi.mock("next/link", () => ({ default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a> }));
 
