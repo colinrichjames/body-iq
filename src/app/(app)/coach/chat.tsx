@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { btnPrimary, field } from "@/components/ui";
-import { STARTERS, type Reply } from "@/lib/coach-chat";
+import { STARTERS, type ActionCard, type ActionStatus, type Reply } from "@/lib/coach-chat";
 import { askCoach } from "./actions";
+import { confirmAction, dismissAction, undoAction } from "./confirm";
 
 type Msg = { id: number; from: "you" | "coach"; text: string; reply?: Reply };
 
@@ -17,6 +18,49 @@ function load(): Msg[] {
   } catch {
     return [];
   }
+}
+
+const STATUS_TEXT: Record<ActionStatus, string> = { proposed: "Waiting for you", applied: "Done", dismissed: "Dismissed", undone: "Undone", failed: "Not done" };
+
+/** One proposed change. Confirm or dismiss it; once applied it can be undone. */
+function ActionCardView({ card, onChange }: { card: ActionCard; onChange: (c: ActionCard) => void }) {
+  const [busy, setBusy] = useState(false);
+  async function run(fn: (id: string) => Promise<{ ok: boolean; status: ActionStatus; message: string }>) {
+    setBusy(true);
+    try {
+      const r = await fn(card.id);
+      onChange({ ...card, status: r.status, result: r.message });
+    } catch {
+      onChange({ ...card, result: "I couldn't reach the server. Nothing was changed." });
+    }
+    setBusy(false);
+  }
+  return (
+    <div className="mt-3 rounded-xl border border-zinc-700 bg-zinc-950/60 p-3" data-testid="action-card">
+      <p className="font-medium text-zinc-100">{card.title}</p>
+      <ul className="mt-1 space-y-0.5 text-xs text-zinc-400">
+        {card.lines.map((l, i) => (
+          <li key={i}>{l}</li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs text-zinc-500">{STATUS_TEXT[card.status]}{card.result && card.status !== "proposed" ? `: ${card.result}` : card.result ? ` - ${card.result}` : ""}</p>
+      {card.status === "proposed" && (
+        <p className="mt-2 flex gap-2">
+          <button type="button" disabled={busy} onClick={() => void run(confirmAction)} className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-zinc-950 disabled:opacity-50">
+            Confirm
+          </button>
+          <button type="button" disabled={busy} onClick={() => void run(dismissAction)} className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 disabled:opacity-50">
+            Dismiss
+          </button>
+        </p>
+      )}
+      {card.status === "applied" && (
+        <button type="button" disabled={busy} onClick={() => void run(undoAction)} className="mt-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 disabled:opacity-50">
+          Undo
+        </button>
+      )}
+    </div>
+  );
 }
 
 /** The coach conversation. Kept on this device only; every answer comes from the server, built from your logged data. */
@@ -82,6 +126,13 @@ export function CoachChat({ initialQuestion, workoutId }: { initialQuestion?: st
           <li key={m.id} className={m.from === "you" ? "flex justify-end" : ""}>
             <div className={`max-w-[92%] rounded-2xl px-4 py-3 text-sm ${m.from === "you" ? "bg-emerald-500/20 text-emerald-100" : "border border-zinc-800 bg-zinc-900/60 text-zinc-200"}`}>
               <p>{m.text}</p>
+              {m.reply?.actions?.map((c) => (
+                <ActionCardView
+                  key={c.id}
+                  card={c}
+                  onChange={(nc) => setMsgs((cur) => cur.map((x) => (x.id === m.id && x.reply ? { ...x, reply: { ...x.reply, actions: x.reply.actions?.map((a) => (a.id === nc.id ? nc : a)) } } : x)))}
+                />
+              ))}
               {m.reply?.lines && (
                 <ul className="mt-2 space-y-1 text-zinc-300">
                   {m.reply.lines.map((l, i) => (
