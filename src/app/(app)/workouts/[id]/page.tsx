@@ -99,6 +99,9 @@ export default async function WorkoutPage({ params, searchParams }: { params: Pr
         {headerFacts(w, unit).map((f) => ` · ${f}`).join("")}
       </p>
       <h1 className="mt-1 text-2xl font-semibold tracking-tight">{w.title}</h1>
+      <Link href={`/coach?w=${w.id}&q=${encodeURIComponent("Tell me about this session")}`} className="mt-1 inline-block text-sm text-emerald-400">
+        Ask coach about this session
+      </Link>
       <div className="mt-2 flex items-center gap-2">
         <StatusBadge status={w.status} overdue={w.workout_date < today} />
         {inProgress && <span className="text-sm text-amber-300">{progressLabel(units.kind, w.progress, doneSets, units.total)}</span>}

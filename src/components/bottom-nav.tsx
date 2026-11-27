@@ -13,7 +13,7 @@ const svg = (children: ReactNode) => (
 );
 
 export const NAV_ITEMS: Item[] = [
-  { href: "/dashboard", label: "Home", icon: svg(<><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10v10h13V10" /><path d="M10 20v-5h4v5" /></>) },
+  { href: "/dashboard", label: "Home", owns: ["/coach"], icon: svg(<><path d="M3 11.5 12 4l9 7.5" /><path d="M5.5 10v10h13V10" /><path d="M10 20v-5h4v5" /></>) },
   { href: "/workouts", label: "Train", icon: svg(<><path d="M6.5 6.5v11M17.5 6.5v11" /><path d="M3.5 9v6M20.5 9v6" /><path d="M6.5 12h11" /></>), except: ["/workouts/calendar"] },
   { href: "/workouts/calendar", label: "Calendar", icon: svg(<><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4" /></>) },
   { href: "/nutrition", label: "Fuel", icon: svg(<><path d="M12 7c-1.5-1.8-5-1.3-5 2.8 0 4 2.5 8.2 5 8.2s5-4.2 5-8.2C17 5.7 13.5 5.2 12 7Z" /><path d="M12 7c0-1.8.9-3 2.5-3.5" /></>) },

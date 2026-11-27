@@ -115,6 +115,14 @@ export default async function DashboardPage() {
         </div>
       </header>
 
+      <Link href="/coach" className="mt-4 flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 active:bg-zinc-800">
+        <span>
+          <span className="block font-medium">Ask coach</span>
+          <span className="block text-xs text-zinc-400">Your session, fuel, lifts, weight and score, from your own data</span>
+        </span>
+        <span aria-hidden className="text-zinc-500">&rsaquo;</span>
+      </Link>
+
       <GarminSyncCard connected={garmin.connected} last={garmin.last} tz={tz} from="/dashboard" />
 
       {isGuest && (
