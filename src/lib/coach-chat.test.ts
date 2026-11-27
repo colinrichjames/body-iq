@@ -82,3 +82,10 @@ describe("replies are built from the data and say so when it is missing", () => 
     expect(sessionReply(w({ status: "completed", actual_duration_min: 31 }), [{ exercise: "x", weight: null, reps: 5, skipped: false }]).lines).toContain("1 set logged.");
   });
 });
+
+describe("weekly review intent", () => {
+  it("is recognised", () => {
+    expect(parseIntent("Review my week").kind).toBe("review");
+    expect(parseIntent("how was my week?").kind).toBe("review");
+  });
+});

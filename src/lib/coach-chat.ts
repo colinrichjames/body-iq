@@ -17,6 +17,7 @@ export type Intent =
   | { kind: "lift_next"; query: string | null }
   | { kind: "body_weight" }
   | { kind: "score" }
+  | { kind: "review" }
   | { kind: "readiness" }
   | { kind: "race" }
   | { kind: "session" }
@@ -28,7 +29,7 @@ export type ActionStatus = "proposed" | "applied" | "dismissed" | "undone" | "fa
 export type ActionCard = { id: string; title: string; lines: string[]; status: ActionStatus; result?: string };
 export type Reply = { text: string; lines?: string[]; links?: { label: string; href: string }[]; suggestions?: string[]; actions?: ActionCard[] };
 
-export const STARTERS = ["What's my workout today?", "How am I doing on fuel today?", "What did I lift last time?", "Why did my weight change?", "Break down my Body IQ score", "Am I ready to train hard?"];
+export const STARTERS = ["What's my workout today?", "How am I doing on fuel today?", "What did I lift last time?", "Why did my weight change?", "Break down my Body IQ score", "Am I ready to train hard?", "Review my week"];
 
 const LIFT_WORDS = "squat|bench|deadlift|press|row|curl|pull-?ups?|push-?ups?|lunges?|plank|hip thrust|pulldown|pushdown|leg press|rdl|dumbbell|barbell";
 
@@ -38,6 +39,7 @@ export function parseIntent(raw: string): Intent {
   if (!t) return { kind: "help" };
   if (/^(help|what can you (do|answer)|commands?|how do(es)? this work)\b/.test(t)) return { kind: "help" };
   if (/\b(this|that) (session|workout)\b|about this (session|workout)/.test(t)) return { kind: "session" };
+  if (/\b(weekly review|week in review|how was my week|review (of )?my week|my week in review)\b/.test(t)) return { kind: "review" };
   const lift = new RegExp(`\\b(${LIFT_WORDS})\\b`).test(t);
   const query = lift ? t.replace(/^.*?\b(?:my|the|on|for|of|did i|i)\s+/, "").replace(/\b(last time|next time|weight|why|what|is|was|did|do|i|my|the|to|go|up|change[d]?|suggested|lift|lifted|squatted|benched)\b/g, " ").replace(/\s+/g, " ").trim() || null : null;
   if (lift && /\b(why|next time|should i|go up|increase|suggest|how much)\b/.test(t) && !/\blast time\b/.test(t)) return { kind: "lift_next", query };

@@ -147,4 +147,21 @@ describe("coach executor", () => {
     await revert(db, "u", "checkin", out.undo);
     expect(t.recovery_checkins).toHaveLength(0);
   });
+
+  it("downgrades a hard session and undo restores every field", async () => {
+    const { db, t } = fakeDb({ workouts: [W({ title: "Tempo run", planned_duration_min: 50, planned_distance_km: 10 })] });
+    const out = await apply(db, "u", "downgrade", { id: "w1", title: "Easy: Tempo run", minutes: 30, km: 6, structure: null }, today);
+    expect(t.workouts[0]).toMatchObject({ title: "Easy: Tempo run", planned_duration_min: 30, planned_distance_km: 6 });
+    await revert(db, "u", "downgrade", out.undo);
+    expect(t.workouts[0]).toMatchObject({ title: "Tempo run", planned_duration_min: 50, planned_distance_km: 10 });
+  });
+
+  it("won't downgrade a session that was done or made harder, or into a bad pace", async () => {
+    const done = fakeDb({ workouts: [W({ status: "completed" })] });
+    await expect(apply(done.db, "u", "downgrade", { id: "w1", title: "Easy", minutes: 30, km: 6 }, today)).rejects.toThrow(/planned/);
+    const longer = fakeDb({ workouts: [W({})] });
+    await expect(apply(longer.db, "u", "downgrade", { id: "w1", title: "Easy", minutes: 90, km: 6 }, today)).rejects.toThrow(/duration/);
+    const pace = fakeDb({ workouts: [W({})] });
+    await expect(apply(pace.db, "u", "downgrade", { id: "w1", title: "Easy", minutes: 10, km: 20 }, today)).rejects.toThrow();
+  });
 });

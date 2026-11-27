@@ -24,7 +24,8 @@ export type ActionKind =
   | "copy_meals"
   | "checkin"
   | "log_scan"
-  | "shift_plan";
+  | "shift_plan"
+  | "downgrade";
 
 export type Proposal = { kind: ActionKind; params: Record<string, unknown>; title: string; lines: string[] };
 export type ParseResult = { proposals: Proposal[] } | { ask: string } | null;
@@ -314,3 +315,19 @@ export function parseAction(raw: string, ctx: ParseCtx): ParseResult {
 
 /** Days helper used by the executor's checks. */
 export const daysBetween = diffDays;
+
+/**
+ * The easier version of a hard planned session: about 60% of the time and distance (so pace stays the same), one fewer
+ * set per lift, and an "Easy:" title. Returns null when the session isn't a plain planned one.
+ */
+export function downgradeProposal(w: CtxWorkout): Proposal | null {
+  if (w.status !== "planned") return null;
+  const orig = w.planned_duration_min;
+  const minutes = orig ? Math.min(orig, Math.max(15, Math.round(orig * 0.6))) : null;
+  const ratio = minutes && orig ? minutes / orig : 1;
+  const km = w.planned_distance_km !== null && w.planned_distance_km !== undefined ? Math.round(Number(w.planned_distance_km) * ratio * 100) / 100 : null;
+  const title = (/^easy\b/i.test(w.title) ? w.title : `Easy: ${w.title}`).slice(0, 120);
+  const structure = w.structure?.exercises?.length ? { ...w.structure, exercises: w.structure.exercises.map((e) => (e.sets && e.sets > 1 ? { ...e, sets: e.sets - 1 } : e)) } : w.structure ?? null;
+  const lines = [`Renamed "${title}".`, ...(minutes && orig && minutes !== orig ? [`${orig} min becomes ${minutes} min${km !== null && w.planned_distance_km ? `, ${Number(w.planned_distance_km)} km becomes ${km} km` : ""}.`] : []), ...(structure !== w.structure ? ["One fewer set on each lift."] : []), "Undo puts it back exactly."];
+  return { kind: "downgrade", params: { id: w.id, title, minutes, km, structure, original: w.title }, title: `Make ${w.title} easier today`, lines };
+}

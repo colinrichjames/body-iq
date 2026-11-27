@@ -94,4 +94,28 @@ describe("CoachChat", () => {
     expect(dismissAction).toHaveBeenCalledWith("a2");
     expect(confirmAction).not.toHaveBeenCalled();
   });
+
+  it("offers a follow-up card after a poor check-in is confirmed, still needing its own confirm", async () => {
+    confirmAction.mockResolvedValueOnce({ ok: true, status: "applied", message: "Check-in saved.", followUp: { text: "Your readiness is red today.", actions: [{ id: "d1", title: "Make Tempo run easier today", lines: [], status: "proposed" }] } } as never);
+    confirmAction.mockClear();
+    askCoach.mockResolvedValueOnce({ args: [], text: "x", actions: [{ id: "c1", title: "Log today's check-in", lines: [], status: "proposed" }] } as never);
+    render(<CoachChat />);
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText("Ask your coach"), { target: { value: "slept badly" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    });
+    expect(screen.getByText("Make Tempo run easier today")).toBeTruthy();
+    expect(confirmAction).toHaveBeenCalledTimes(1); // the second card was not confirmed for you
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeTruthy();
+  });
+
+  it("shows today's proactive note when there is one", async () => {
+    render(<CoachChat proactive={{ text: "Your week, Nov 23 to Nov 29:", lines: ["Training: 3 of 4 planned sessions done."] }} />);
+    await act(async () => {});
+    expect(screen.getByTestId("proactive").textContent).toContain("Training: 3 of 4");
+  });
 });

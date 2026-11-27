@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth";
 import { addDays } from "@/lib/dates";
 import { bodyWeightReply, findExercise, fuelReply, helpReply, lastLiftReply, nextLiftReply, parseIntent, raceReply, readinessReply, scoreReply, sessionReply, todayReply, unknownReply, type LiftSession, type ActionCard, type Reply } from "@/lib/coach-chat";
 import { parseAction, type CtxWorkout } from "@/lib/coach-actions";
+import { downgradeCard, findDowngrade, loadReview, offerText } from "./offers";
 import { loadCoach } from "@/lib/coach-data";
 import { computeInsights } from "@/lib/insights";
 import { classify } from "@/lib/intensity";
@@ -44,6 +45,8 @@ export async function askCoach(text: string, ctx: { workoutId?: string } = {}): 
     }
     const intent = parseIntent(question);
     switch (intent.kind) {
+      case "review":
+        return (await loadReview(supabase, userId, today)) ?? { text: "I don't have anything logged for last week (Monday to Sunday), so there's nothing to review yet." };
       case "help":
         return helpReply();
       case "unknown":
@@ -53,7 +56,10 @@ export async function askCoach(text: string, ctx: { workoutId?: string } = {}): 
         const rows = data ?? [];
         const todays = rows.filter((w) => w.workout_date === today);
         const upcoming = rows.find((w) => w.workout_date > today && w.status === "planned") ?? null;
-        return todayReply(today, todays, upcoming);
+        const reply = todayReply(today, todays, upcoming);
+        const down = await findDowngrade(supabase, today);
+        const card = down ? await downgradeCard(supabase, down) : null;
+        return down && card ? { ...reply, lines: [...(reply.lines ?? []), offerText(down)], actions: [card] } : reply;
       }
       case "fuel": {
         const [days, profile, wk] = await Promise.all([
@@ -129,7 +135,10 @@ export async function askCoach(text: string, ctx: { workoutId?: string } = {}): 
           supabase.from("workouts").select("*").eq("workout_date", today).returns<Workout[]>(),
         ]);
         const hard = (wk.data ?? []).find((w) => w.status === "planned" && classify(w).level === "hard") ?? null;
-        return readinessReply(computeReadiness(mergeCheckins(health.data ?? [], checks.data ?? [])), hard);
+        const reply = readinessReply(computeReadiness(mergeCheckins(health.data ?? [], checks.data ?? [])), hard);
+        const down = await findDowngrade(supabase, today);
+        const card = down ? await downgradeCard(supabase, down) : null;
+        return down && card ? { ...reply, lines: [...(reply.lines ?? []), "Want me to make it easier? Nothing changes unless you confirm."], actions: [card] } : reply;
       }
       case "race": {
         const { data: races } = await supabase.from("races").select("*").gte("race_date", today).order("race_date").limit(1).returns<Race[]>();
