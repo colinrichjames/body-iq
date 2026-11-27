@@ -97,6 +97,18 @@ export async function apply(db: SupabaseClient, userId: string, kind: ActionKind
       must(error, "change the workout");
       return { message: kind === "set_weight" ? `Set ${str(p.exercise)} to ${p.weight} lb.` : `Swapped ${str(p.from)} for ${str(p.to)}.`, undo: { id: w.id, structure: s } };
     }
+    case "downgrade": {
+      const w = await getWorkout(db, str(p.id));
+      if (w.status !== "planned") throw new Error(`${w.title} isn't a planned session any more, so I left it alone.`);
+      const minutes = p.minutes === null || p.minutes === undefined ? w.planned_duration_min : Number(p.minutes);
+      const km = p.km === null || p.km === undefined ? w.planned_distance_km : Number(p.km);
+      if (minutes !== null && !(minutes > 0 && minutes <= (w.planned_duration_min ?? minutes))) throw new Error("That duration isn't valid.");
+      const issue = sessionPaceProblem(w.sport, minutes, km !== null ? Number(km) : null, str(p.title) || w.title);
+      if (issue) throw new Error(issue);
+      const { error } = await db.from("workouts").update({ title: str(p.title).slice(0, 120) || w.title, planned_duration_min: minutes, planned_distance_km: km, structure: p.structure ?? w.structure }).eq("id", w.id);
+      must(error, "make it easier");
+      return { message: `${w.title} is now easier.`, undo: { id: w.id, title: w.title, planned_duration_min: w.planned_duration_min, planned_distance_km: w.planned_distance_km, structure: w.structure ?? null } };
+    }
     case "log_food": {
       const day = str(p.day);
       const meal = str(p.meal);
@@ -189,6 +201,11 @@ export async function revert(db: SupabaseClient, userId: string, kind: ActionKin
     case "swap_exercise":
     case "set_weight": {
       const { error } = await db.from("workouts").update({ structure: u.structure }).eq("id", str(u.id));
+      must(error, "restore the workout");
+      return "Restored.";
+    }
+    case "downgrade": {
+      const { error } = await db.from("workouts").update({ title: u.title, planned_duration_min: u.planned_duration_min, planned_distance_km: u.planned_distance_km, structure: u.structure }).eq("id", str(u.id));
       must(error, "restore the workout");
       return "Restored.";
     }

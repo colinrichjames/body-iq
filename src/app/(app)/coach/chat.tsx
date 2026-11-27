@@ -23,13 +23,14 @@ function load(): Msg[] {
 const STATUS_TEXT: Record<ActionStatus, string> = { proposed: "Waiting for you", applied: "Done", dismissed: "Dismissed", undone: "Undone", failed: "Not done" };
 
 /** One proposed change. Confirm or dismiss it; once applied it can be undone. */
-function ActionCardView({ card, onChange }: { card: ActionCard; onChange: (c: ActionCard) => void }) {
+function ActionCardView({ card, onChange, onFollowUp }: { card: ActionCard; onChange: (c: ActionCard) => void; onFollowUp?: (text: string, actions: ActionCard[]) => void }) {
   const [busy, setBusy] = useState(false);
-  async function run(fn: (id: string) => Promise<{ ok: boolean; status: ActionStatus; message: string }>) {
+  async function run(fn: (id: string) => Promise<{ ok: boolean; status: ActionStatus; message: string; followUp?: { text: string; actions: ActionCard[] } }>) {
     setBusy(true);
     try {
       const r = await fn(card.id);
       onChange({ ...card, status: r.status, result: r.message });
+      if (r.followUp) onFollowUp?.(r.followUp.text, r.followUp.actions);
     } catch {
       onChange({ ...card, result: "I couldn't reach the server. Nothing was changed." });
     }
@@ -63,8 +64,29 @@ function ActionCardView({ card, onChange }: { card: ActionCard; onChange: (c: Ac
   );
 }
 
+/** The coach's one message for today. It comes from the server (saved per day), so it isn't kept in this device's chat. */
+function ProactiveNote({ reply }: { reply: Reply }) {
+  const [card, setCard] = useState<ActionCard[]>(reply.actions ?? []);
+  return (
+    <div className="mb-4 rounded-2xl border border-emerald-700/50 bg-emerald-950/20 px-4 py-3 text-sm text-zinc-200" data-testid="proactive">
+      <p className="text-xs font-medium uppercase tracking-widest text-emerald-400">From your coach today</p>
+      <p className="mt-1">{reply.text}</p>
+      {reply.lines && (
+        <ul className="mt-2 space-y-1 text-zinc-300">
+          {reply.lines.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+      )}
+      {card.map((c) => (
+        <ActionCardView key={c.id} card={c} onChange={(nc) => setCard((cur) => cur.map((a) => (a.id === nc.id ? nc : a)))} />
+      ))}
+    </div>
+  );
+}
+
 /** The coach conversation. Kept on this device only; every answer comes from the server, built from your logged data. */
-export function CoachChat({ initialQuestion, workoutId }: { initialQuestion?: string; workoutId?: string }) {
+export function CoachChat({ initialQuestion, workoutId, proactive }: { initialQuestion?: string; workoutId?: string; proactive?: Reply | null }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -116,6 +138,7 @@ export function CoachChat({ initialQuestion, workoutId }: { initialQuestion?: st
 
   return (
     <div className="mt-4">
+      {proactive && <ProactiveNote reply={proactive} />}
       <ul className="space-y-3" aria-live="polite">
         {msgs.length === 0 && (
           <li className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-300">
@@ -130,6 +153,7 @@ export function CoachChat({ initialQuestion, workoutId }: { initialQuestion?: st
                 <ActionCardView
                   key={c.id}
                   card={c}
+                  onFollowUp={(t, actions) => setMsgs((cur) => [...cur, { id: next.current++, from: "coach", text: t, reply: { text: t, actions } }])}
                   onChange={(nc) => setMsgs((cur) => cur.map((x) => (x.id === m.id && x.reply ? { ...x, reply: { ...x.reply, actions: x.reply.actions?.map((a) => (a.id === nc.id ? nc : a)) } } : x)))}
                 />
               ))}

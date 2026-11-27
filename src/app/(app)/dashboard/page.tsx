@@ -14,6 +14,7 @@ import { loadNutritionDays } from "@/lib/nutrition-data";
 import { newestScanFirst } from "@/lib/scan-order";
 import { loggingStreak } from "@/lib/food-stats";
 import { CoachCard } from "@/components/coach-card";
+import { getProactive } from "../coach/proactive-actions";
 import { loadCoach } from "@/lib/coach-data";
 import { DeloadNotice } from "@/components/deload-notice";
 import { CheckinCard } from "@/components/checkin-card";
@@ -56,7 +57,7 @@ export default async function DashboardPage() {
   const todaysCheckin = (checkinRes.data ?? []).find((c) => c.day === today) ?? null;
   const readiness = computeReadiness(health);
   // Everything below is independent of each other, so it runs together instead of one round trip after another.
-  const [planRowsRes, deloadCheck, coach, finishedRes, garmin, tz, actRes] = await Promise.all([
+  const [planRowsRes, deloadCheck, coach, finishedRes, garmin, tz, actRes, proactive] = await Promise.all([
     nextRace
       ? supabase.from("workouts").select("workout_date,created_at").eq("race_id", nextRace.id).eq("generated", true).returns<{ workout_date: string; created_at: string }[]>()
       : Promise.resolve({ data: null as { workout_date: string; created_at: string }[] | null }),
@@ -71,6 +72,7 @@ export default async function DashboardPage() {
       .gte("started_at", `${addDays(today, -8)}T00:00:00Z`)
       .order("started_at", { ascending: false })
       .returns<Act[]>(),
+    getProactive(),
   ]);
   const planStart = planStartFrom(planRowsRes.data ?? []);
   const nextPhase = nextRace ? phaseInfo(nextRace.race_type, nextRace.race_date, today, planStart) : null;
@@ -117,8 +119,8 @@ export default async function DashboardPage() {
 
       <Link href="/coach" className="mt-4 flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 active:bg-zinc-800">
         <span>
-          <span className="block font-medium">Ask coach</span>
-          <span className="block text-xs text-zinc-400">Your session, fuel, lifts, weight and score, from your own data</span>
+          <span className="block font-medium">{proactive ? "Coach has a note for you" : "Ask coach"}</span>
+          <span className="block text-xs text-zinc-400">{proactive ? proactive.reply.text : "Your session, fuel, lifts, weight and score, from your own data"}</span>
         </span>
         <span aria-hidden className="text-zinc-500">&rsaquo;</span>
       </Link>

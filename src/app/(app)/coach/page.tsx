@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { CoachChat } from "./chat";
+import { getProactive } from "./proactive-actions";
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
 export default async function CoachPage({ searchParams }: { searchParams: Promise<{ q?: string; w?: string }> }) {
   const { supabase } = await requireUser();
   const { q, w } = await searchParams;
+  const proactive = await getProactive();
   const { data: log } = await supabase.from("coach_actions").select("id,summary,status,result,created_at").neq("status", "proposed").order("created_at", { ascending: false }).limit(15).returns<{ id: string; summary: string; status: string; result: string | null; created_at: string }[]>();
   return (
     <main className="mx-auto w-full max-w-md px-5 py-8">
@@ -15,7 +17,7 @@ export default async function CoachPage({ searchParams }: { searchParams: Promis
       </Link>
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">Coach</h1>
       <p className="mt-1 text-sm text-zinc-500">Answers come from your own logs. It can also propose changes (move a workout, log food or water, a check-in...), but nothing changes until you confirm, and you can undo it.</p>
-      <CoachChat key={`${q ?? ""}${w ?? ""}`} initialQuestion={q?.slice(0, 300)} workoutId={w && UUID.test(w) ? w : undefined} />
+      <CoachChat proactive={proactive?.reply ?? null} key={`${q ?? ""}${w ?? ""}`} initialQuestion={q?.slice(0, 300)} workoutId={w && UUID.test(w) ? w : undefined} />
       <section className="mt-8" aria-label="Coach action log">
         <h2 className="text-sm font-medium text-zinc-300">What the coach changed</h2>
         {!log?.length ? (

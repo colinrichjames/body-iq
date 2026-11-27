@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import type { ActionKind } from "@/lib/coach-actions";
-import type { ActionStatus } from "@/lib/coach-chat";
+import type { ActionCard, ActionStatus } from "@/lib/coach-chat";
 import { getToday } from "@/lib/today";
 import { apply, revert } from "./exec";
+import { downgradeCard, findDowngrade, offerText } from "./offers";
 
 type Row = { id: string; kind: ActionKind; summary: string; params: Record<string, unknown>; status: ActionStatus; result: string | null; undo: Record<string, unknown> | null };
-export type ActionResult = { ok: boolean; status: ActionStatus; message: string };
+export type ActionResult = { ok: boolean; status: ActionStatus; message: string; followUp?: { text: string; actions: ActionCard[] } };
 
 async function load(id: string) {
   const ctx = await requireUser();
@@ -29,7 +30,18 @@ export async function confirmAction(id: string): Promise<ActionResult> {
     const out = await apply(supabase, userId, row.kind, row.params, await getToday());
     await supabase.from("coach_actions").update({ status: "applied", result: out.message, undo: out.undo, resolved_at: now }).eq("id", row.id);
     revalidatePath("/", "layout");
-    return { ok: true, status: "applied", message: out.message };
+    // A poor check-in with a hard session waiting: offer to make it easier (a new card; nothing changes until confirmed).
+    let followUp: ActionResult["followUp"];
+    if (row.kind === "checkin") {
+      try {
+        const down = await findDowngrade(supabase, await getToday());
+        const card = down ? await downgradeCard(supabase, down) : null;
+        if (down && card) followUp = { text: offerText(down), actions: [card] };
+      } catch {
+        // the offer is optional; the check-in itself is saved
+      }
+    }
+    return { ok: true, status: "applied", message: out.message, followUp };
   } catch (e) {
     const message = e instanceof Error ? e.message : "That didn't work.";
     await supabase.from("coach_actions").update({ status: "failed", result: message, resolved_at: now }).eq("id", row.id);
